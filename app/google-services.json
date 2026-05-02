@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "408006485279",
+    "firebase_url": "https://fir-app-e5a43-default-rtdb.firebaseio.com",
+    "project_id": "fir-app-e5a43",
+    "storage_bucket": "fir-app-e5a43.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:408006485279:android:2e89822f86dd6c6e72bc2a",
+        "android_client_info": {
+          "package_name": "com.madassignment.myaccomodationapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "408006485279-kcuq5m9gjipkhjenaotog3teergpd5ia.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD3RSVKhUoMP_Bxr7A9vdx3rPZHbjRnGhM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "408006485279-kcuq5m9gjipkhjenaotog3teergpd5ia.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

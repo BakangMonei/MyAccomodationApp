@@ -21,7 +21,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
@@ -62,7 +61,6 @@ class HomeViewModel @Inject constructor(
 
     val listings: Flow<PagingData<Listing>> =
         _appliedFilters
-            .distinctUntilChanged()
             .flatMapLatest { filters ->
                 Pager(
                     config = PagingConfig(pageSize = 20, enablePlaceholders = false),

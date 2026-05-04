@@ -5,6 +5,7 @@ import com.madassignment.myaccomodationapp.data.mapper.toListingOrNull
 import com.madassignment.myaccomodationapp.data.util.FirestoreCursors
 import com.madassignment.myaccomodationapp.domain.model.Listing
 import com.madassignment.myaccomodationapp.domain.model.ListingFilters
+import com.madassignment.myaccomodationapp.domain.model.matches
 import com.madassignment.myaccomodationapp.domain.model.ListingPage
 import com.madassignment.myaccomodationapp.domain.model.ListingStatus
 import com.madassignment.myaccomodationapp.domain.repository.ListingRepository
@@ -34,8 +35,8 @@ class FirestoreListingRepository @Inject constructor(
         // INDEX REQUIRED: listings — status + price range + location + type (client-filter type when both multi-select due Firestore whereIn limits)
         var query: Query = firestore.collection(COLLECTION)
             .whereEqualTo("status", ListingStatus.Available.wireValue)
-            .whereGreaterThanOrEqual("price", filters.minPrice)
-            .whereLessThanOrEqual("price", filters.maxPrice)
+            .whereGreaterThanOrEqualTo("price", filters.minPrice)
+            .whereLessThanOrEqualTo("price", filters.maxPrice)
 
         when (filters.locations.size) {
             1 -> {

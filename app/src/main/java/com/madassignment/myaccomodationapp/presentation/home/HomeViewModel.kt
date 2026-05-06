@@ -2,21 +2,16 @@ package com.madassignment.myaccomodationapp.presentation.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.paging.Pager
-import androidx.paging.PagingConfig
-import androidx.paging.PagingData
-import androidx.paging.cachedIn
 import com.madassignment.myaccomodationapp.domain.model.Listing
 import com.madassignment.myaccomodationapp.domain.model.ListingFilters
 import com.madassignment.myaccomodationapp.domain.model.defaultUserPreferences
 import com.madassignment.myaccomodationapp.domain.model.toListingFilters
-import com.madassignment.myaccomodationapp.domain.usecase.FetchListingsPageUseCase
 import com.madassignment.myaccomodationapp.domain.usecase.ObserveAuthStateUseCase
+import com.madassignment.myaccomodationapp.domain.usecase.ObserveFilteredListingsUseCase
 import com.madassignment.myaccomodationapp.domain.usecase.ObserveUserProfileUseCase
 import com.madassignment.myaccomodationapp.domain.usecase.SaveUserPreferencesUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -24,6 +19,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -34,7 +30,7 @@ class HomeViewModel @Inject constructor(
     observeAuthState: ObserveAuthStateUseCase,
     private val observeUserProfile: ObserveUserProfileUseCase,
     private val saveUserPreferences: SaveUserPreferencesUseCase,
-    private val fetchListingsPage: FetchListingsPageUseCase,
+    private val observeFilteredListings: ObserveFilteredListingsUseCase,
 ) : ViewModel() {
 
     private val authUid = observeAuthState()
@@ -59,15 +55,17 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    val listings: Flow<PagingData<Listing>> =
+    /**
+     * Null means the first snapshot has not arrived yet; empty list is a valid result.
+     */
+    val listings: StateFlow<List<Listing>?> =
         _appliedFilters
             .flatMapLatest { filters ->
-                Pager(
-                    config = PagingConfig(pageSize = 20, enablePlaceholders = false),
-                    pagingSourceFactory = { ListingPagingSource(fetchListingsPage, filters) },
-                ).flow
+                observeFilteredListings(filters)
+                    .map<List<Listing>, List<Listing>?> { it }
+                    .onStart { emit(null) }
             }
-            .cachedIn(viewModelScope)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     fun applyFilters(filters: ListingFilters) {
         _appliedFilters.value = filters

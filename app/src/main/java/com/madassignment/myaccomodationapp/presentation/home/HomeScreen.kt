@@ -8,14 +8,23 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -34,13 +43,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.paging.LoadState
-import androidx.paging.compose.collectAsLazyPagingItems
-import androidx.paging.compose.itemKey
 import coil.compose.AsyncImage
 import com.madassignment.myaccomodationapp.domain.model.GaboroneRegion
 import com.madassignment.myaccomodationapp.domain.model.ListingFilters
@@ -54,75 +64,102 @@ fun HomeRoute(
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val applied by viewModel.appliedFilters.collectAsStateWithLifecycle()
-    val paging = viewModel.listings.collectAsLazyPagingItems()
+    val listings by viewModel.listings.collectAsStateWithLifecycle()
     var sheetOpen by remember { mutableStateOf(false) }
 
     Column(modifier = modifier.fillMaxSize()) {
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            FilterChip(
-                selected = false,
-                onClick = { sheetOpen = true },
-                label = { Text("Filters") },
-            )
-            Text(
-                "BWP ${applied.minPrice.toInt()}–${applied.maxPrice.toInt()}",
-                modifier = Modifier.align(Alignment.CenterVertically),
-                style = MaterialTheme.typography.bodySmall,
-            )
+            BadgedBox(badge = { Badge { Text("Live") } }) {
+                AssistChip(
+                    onClick = { sheetOpen = true },
+                    label = { Text("Filters") },
+                    border = AssistChipDefaults.assistChipBorder(
+                        enabled = true,
+                        borderColor = MaterialTheme.colorScheme.outline,
+                    ),
+                )
+            }
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "Near campus",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    "BWP ${applied.minPrice.toInt()}–${applied.maxPrice.toInt()} · updates instantly",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
-        when (paging.loadState.refresh) {
-            is LoadState.Loading -> {
-                LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        when {
+            listings == null -> {
+                LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     items(6) {
                         ListingSkeleton()
                     }
                 }
             }
-            is LoadState.Error -> {
-                Column(
+            listings.isEmpty() -> {
+                Box(
                     Modifier
                         .fillMaxSize()
-                        .padding(24.dp),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally,
+                        .padding(32.dp),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Text("Could not load listings. Check connection and try again.")
-                    Spacer(Modifier.height(12.dp))
-                    Button(onClick = { paging.retry() }) { Text("Retry") }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            "No listings match these filters",
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Widen the price range or clear region filters.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
             else -> {
+                val data = listings
                 LazyColumn(
                     Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                    contentPadding = PaddingValues(bottom = 24.dp),
                 ) {
-                    items(
-                        count = paging.itemCount,
-                        key = paging.itemKey { it.id },
-                    ) { index ->
-                        val item = paging[index]
-                        if (item == null) {
-                            ListingSkeleton()
-                        } else {
-                            ListingRow(item) { onOpenListing(item.id) }
+                    item {
+                        Row(
+                            Modifier.padding(horizontal = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Icon(
+                                Icons.Filled.Refresh,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.tertiary,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Text(
+                                "${data.size} places · Firestore realtime",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
                     }
-                    item {
-                        if (paging.loadState.append is LoadState.Loading) {
-                            Box(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                CircularProgressIndicator()
-                            }
-                        }
+                    items(
+                        count = data.size,
+                        key = { data[it].id },
+                    ) { index ->
+                        val item = data[index]
+                        ListingCard(item) { onOpenListing(item.id) }
                     }
                 }
             }
@@ -146,22 +183,22 @@ private fun ListingSkeleton() {
     Column(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .padding(horizontal = 16.dp)
+            .clip(RoundedCornerShape(20.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .padding(12.dp),
     ) {
         Box(
             Modifier
                 .fillMaxWidth()
-                .height(140.dp)
-                .clip(RoundedCornerShape(8.dp))
+                .height(180.dp)
+                .clip(RoundedCornerShape(16.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant),
         )
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(10.dp))
         Box(
             Modifier
-                .fillMaxWidth(0.6f)
+                .fillMaxWidth(0.55f)
                 .height(18.dp)
                 .clip(RoundedCornerShape(4.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant),
@@ -170,37 +207,75 @@ private fun ListingSkeleton() {
 }
 
 @Composable
-private fun ListingRow(
+private fun ListingCard(
     listing: com.madassignment.myaccomodationapp.domain.model.Listing,
     onClick: () -> Unit,
 ) {
     Card(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp)
+            .padding(horizontal = 16.dp)
             .clickable(onClick = onClick),
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
     ) {
-        Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            AsyncImage(
-                model = listing.imageUrls.first(),
-                contentDescription = null,
-                modifier = Modifier
-                    .height(88.dp)
-                    .fillMaxWidth(0.35f)
-                    .clip(RoundedCornerShape(8.dp)),
-                contentScale = ContentScale.Crop,
-            )
-            Column(Modifier.weight(1f)) {
-                Text(listing.title, style = MaterialTheme.typography.titleMedium)
+        Column {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(200.dp),
+            ) {
+                AsyncImage(
+                    model = listing.imageUrls.first(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    MaterialTheme.colorScheme.scrim.copy(alpha = 0.55f),
+                                ),
+                            ),
+                        ),
+                )
                 Text(
-                    "${listing.location} · ${listing.type}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    listing.type,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(12.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f))
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Medium,
                 )
                 Text(
                     "P${listing.price.toInt()} / mo",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(14.dp),
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    listing.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    "${listing.location} · by ${listing.providerDisplayName}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }

@@ -1,11 +1,21 @@
 /**
- * Standalone seed script — run with Firebase Admin after `npm install` in scripts/.
- * Usage: export GOOGLE_APPLICATION_CREDENTIALS=/path/to/serviceAccount.json
- *        node seed-listings.mjs
+ * Seeds 50 listings with images in Firebase Storage + metadata in Firestore.
+ *
+ * Prereqs:
+ *   cd scripts && npm install
+ *   export GOOGLE_APPLICATION_CREDENTIALS=/path/to/serviceAccount.json
+ *
+ * Usage: node seed-listings.mjs
+ *
+ * Storage path: listings/seed/{listingId}/cover.jpg
+ * Ensure Storage rules allow admin SDK writes (service account bypasses client rules;
+ * Emulator: start Storage emulator if testing locally).
  */
 import { initializeApp, applicationDefault, cert } from "firebase-admin/app";
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
+import { getStorage } from "firebase-admin/storage";
 import { readFileSync, existsSync } from "fs";
+import { randomUUID } from "crypto";
 
 const regions = [
   "Gaborone CBD",
@@ -29,6 +39,25 @@ function mulberry32(a) {
   };
 }
 
+async function uploadCoverImage(bucket, objectPath, seed) {
+  const url = `https://picsum.photos/seed/${encodeURIComponent(seed)}/800/600`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Image fetch failed ${res.status}`);
+  const buffer = Buffer.from(await res.arrayBuffer());
+  const token = randomUUID();
+  const file = bucket.file(objectPath);
+  await file.save(buffer, {
+    metadata: {
+      contentType: "image/jpeg",
+      metadata: {
+        firebaseStorageDownloadTokens: token,
+      },
+    },
+  });
+  const encoded = encodeURIComponent(objectPath);
+  return `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encoded}?alt=media&token=${token}`;
+}
+
 async function main() {
   const seed = Number(process.env.SEED || "42");
   const rng = mulberry32(seed);
@@ -41,11 +70,11 @@ async function main() {
   }
 
   const db = getFirestore();
-  const batch = db.batch();
+  const bucket = getStorage().bucket();
   const providerId = process.env.SEED_PROVIDER_UID || "seed-provider-001";
   const providerName = "Seed Provider";
+  const count = Number(process.env.SEED_COUNT || "50");
 
-  const count = 55;
   for (let i = 0; i < count; i++) {
     const ref = db.collection("listings").doc();
     const region = pick(rng, regions);
@@ -56,7 +85,10 @@ async function main() {
     const avail = new Date();
     avail.setDate(avail.getDate() + dayOffset);
 
-    batch.set(ref, {
+    const storagePath = `listings/seed/${ref.id}/cover.jpg`;
+    const imageUrl = await uploadCoverImage(bucket, storagePath, `${ref.id}-${i}`);
+
+    await ref.set({
       title: `${typ} near ${region} · listing ${i + 1}`,
       price,
       depositAmount: deposit,
@@ -64,16 +96,19 @@ async function main() {
       type: typ,
       amenities: ["Wi-Fi", "Prepaid utilities", "Borehole water"].slice(0, 2 + Math.floor(rng() * 2)),
       availabilityDate: Timestamp.fromDate(avail),
-      imageUrls: [`https://picsum.photos/seed/${ref.id}/800/600`],
+      imageUrls: [imageUrl],
       status: "Available",
       providerId,
       providerDisplayName: providerName,
       createdAt: Timestamp.now(),
     });
+
+    if ((i + 1) % 10 === 0) {
+      console.log(`Uploaded ${i + 1}/${count}…`);
+    }
   }
 
-  await batch.commit();
-  console.log(`Seeded ${count} listings for provider ${providerId}.`);
+  console.log(`Done: ${count} listings with Storage images for provider ${providerId}.`);
 }
 
 main().catch((e) => {

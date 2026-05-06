@@ -17,6 +17,13 @@ class FetchListingsPageUseCase @Inject constructor(
     ): Result<ListingPage> = listingRepository.fetchPage(filters, pageSize, cursor)
 }
 
+class ObserveFilteredListingsUseCase @Inject constructor(
+    private val listingRepository: ListingRepository,
+) {
+    operator fun invoke(filters: ListingFilters): Flow<List<Listing>> =
+        listingRepository.observeFilteredAvailableListings(filters)
+}
+
 class ObserveListingUseCase @Inject constructor(
     private val listingRepository: ListingRepository,
 ) {

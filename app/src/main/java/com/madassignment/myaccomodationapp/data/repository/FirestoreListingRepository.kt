@@ -30,26 +30,7 @@ class FirestoreListingRepository @Inject constructor(
         pageSize: Int,
         cursor: String?,
     ): Result<ListingPage> = runCatching {
-        // INDEX REQUIRED: listings — status == + price range + orderBy price ASC, createdAt DESC
-        // INDEX REQUIRED: listings — status + price range + location (equality OR whereIn) + orderBy price + createdAt
-        // INDEX REQUIRED: listings — status + price range + location + type (client-filter type when both multi-select due Firestore whereIn limits)
-        var query: Query = firestore.collection(COLLECTION)
-            .whereEqualTo("status", ListingStatus.Available.wireValue)
-            .whereGreaterThanOrEqualTo("price", filters.minPrice)
-            .whereLessThanOrEqualTo("price", filters.maxPrice)
-
-        when (filters.locations.size) {
-            1 -> {
-                query = query.whereEqualTo("location", filters.locations.first())
-            }
-            in 2..10 -> {
-                query = query.whereIn("location", filters.locations)
-            }
-        }
-
-        query = query
-            .orderBy("price", Query.Direction.ASCENDING)
-            .orderBy("createdAt", Query.Direction.DESCENDING)
+        var query = buildBaseQuery(filters)
 
         if (cursor != null) {
             val path = FirestoreCursors.decodePath(cursor)
@@ -74,6 +55,50 @@ class FirestoreListingRepository @Inject constructor(
         }
 
         ListingPage(items = matched, nextCursor = nextCursor)
+    }
+
+    override fun observeFilteredAvailableListings(
+        filters: ListingFilters,
+        limit: Long,
+    ): Flow<List<Listing>> = callbackFlow {
+        val reg = buildBaseQuery(filters)
+            .limit(limit)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+                val items = snapshot?.documents.orEmpty()
+                    .asSequence()
+                    .mapNotNull { it.toListingOrNull() }
+                    .filter { filters.matches(it) }
+                    .sortedWith(compareBy<Listing> { it.price }.thenByDescending { it.createdAt })
+                    .toList()
+                trySend(items)
+            }
+        awaitClose { reg.remove() }
+    }.distinctUntilChanged()
+
+    private fun buildBaseQuery(filters: ListingFilters): Query {
+        // INDEX REQUIRED: listings — status == + price range + orderBy price ASC, createdAt DESC
+        // INDEX REQUIRED: listings — status + price range + location (equality OR whereIn) + orderBy price + createdAt
+        var query: Query = firestore.collection(COLLECTION)
+            .whereEqualTo("status", ListingStatus.Available.wireValue)
+            .whereGreaterThanOrEqualTo("price", filters.minPrice)
+            .whereLessThanOrEqualTo("price", filters.maxPrice)
+
+        when (filters.locations.size) {
+            1 -> {
+                query = query.whereEqualTo("location", filters.locations.first())
+            }
+            in 2..10 -> {
+                query = query.whereIn("location", filters.locations)
+            }
+        }
+
+        return query
+            .orderBy("price", Query.Direction.ASCENDING)
+            .orderBy("createdAt", Query.Direction.DESCENDING)
     }
 
     override fun observeListing(listingId: String): Flow<Listing?> = callbackFlow {

@@ -1,0 +1,56 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Android: List emulators (AVDs)",
+      "type": "shell",
+      "command": "${env:HOME}/Library/Android/sdk/emulator/emulator",
+      "args": ["-list-avds"],
+      "group": "none",
+      "problemMatcher": []
+    },
+    {
+      "label": "Android: Start emulator",
+      "type": "shell",
+      "command": "${env:HOME}/Library/Android/sdk/emulator/emulator",
+      "args": ["-avd", "${input:androidAvdName}"],
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "Android: Install debug APK",
+      "type": "shell",
+      "command": "./gradlew :app:installDebug",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Android: Assemble debug",
+      "type": "shell",
+      "command": "./gradlew :app:assembleDebug",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "build",
+      "problemMatcher": []
+    }
+  ],
+  "inputs": [
+    {
+      "id": "androidAvdName",
+      "type": "promptString",
+      "description": "AVD name (from List emulators task). If your SDK path differs, set ANDROID_HOME and edit tasks.json command path.",
+      "default": "Small_Phone"
+    }
+  ]
+}

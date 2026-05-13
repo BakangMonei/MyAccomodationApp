@@ -12,8 +12,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
@@ -65,6 +65,7 @@ fun HomeRoute(
 ) {
     val applied by viewModel.appliedFilters.collectAsStateWithLifecycle()
     val listings by viewModel.listings.collectAsStateWithLifecycle()
+    val data = listings
     var sheetOpen by remember { mutableStateOf(false) }
 
     Column(modifier = modifier.fillMaxSize()) {
@@ -100,14 +101,14 @@ fun HomeRoute(
             }
         }
         when {
-            listings == null -> {
+            data == null -> {
                 LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     items(6) {
                         ListingSkeleton()
                     }
                 }
             }
-            listings.isEmpty() -> {
+            data.isEmpty() -> {
                 Box(
                     Modifier
                         .fillMaxSize()
@@ -129,7 +130,6 @@ fun HomeRoute(
                 }
             }
             else -> {
-                val data = listings
                 LazyColumn(
                     Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(14.dp),

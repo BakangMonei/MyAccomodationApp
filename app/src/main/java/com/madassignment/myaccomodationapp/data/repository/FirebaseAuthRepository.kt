@@ -38,7 +38,22 @@ class FirebaseAuthRepository @Inject constructor(
     }.distinctUntilChanged()
 
     override suspend fun signIn(email: String, password: String): Result<Unit> = runCatching {
-        auth.signInWithEmailAndPassword(email, password).await()
+        val credential = auth.signInWithEmailAndPassword(email, password).await()
+        val uid = credential.user?.uid ?: return@runCatching
+        val userRef = firestore.collection("users").document(uid)
+        val snap = userRef.get().await()
+        if (!snap.exists()) {
+            userRef.set(
+                mapOf(
+                    "role" to UserRole.Student.name,
+                    "displayName" to email.substringBefore("@"),
+                    "email" to email,
+                    "createdAt" to FieldValue.serverTimestamp(),
+                    "preferences" to preferenceSeedMap(),
+                ),
+                SetOptions.merge(),
+            ).await()
+        }
     }
 
     override suspend fun signUp(

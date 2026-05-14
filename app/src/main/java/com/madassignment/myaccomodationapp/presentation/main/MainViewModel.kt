@@ -10,8 +10,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
@@ -29,12 +29,14 @@ class MainViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     val profile: StateFlow<UserProfile?> = uidFlow
-        .filterNotNull()
-        .flatMapLatest { observeUserProfile(it) }
+        .flatMapLatest { uid ->
+            if (uid == null) flowOf(null) else observeUserProfile(uid)
+        }
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     val unreadChats: StateFlow<Int> = uidFlow
-        .filterNotNull()
-        .flatMapLatest { observeTotalChatUnread(it) }
+        .flatMapLatest { uid ->
+            if (uid == null) flowOf(0) else observeTotalChatUnread(uid)
+        }
         .stateIn(viewModelScope, SharingStarted.Eagerly, 0)
 }

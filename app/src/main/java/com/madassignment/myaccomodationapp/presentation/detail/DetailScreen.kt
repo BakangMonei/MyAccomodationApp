@@ -113,10 +113,7 @@ fun DetailRoute(
             Spacer(Modifier.height(8.dp))
             if (item.status == ListingStatus.Available) {
                 Button(
-                    onClick = { 
-                        if (authUid != null) onReserve(item.id) 
-                        else onOpenChat("auth", "") // Hack to trigger auth, or better, just check in NavHost
-                    },
+                    onClick = { onReserve(item.id) },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = true
                 ) {

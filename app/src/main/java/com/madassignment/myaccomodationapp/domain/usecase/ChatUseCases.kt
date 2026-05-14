@@ -1,9 +1,17 @@
 package com.madassignment.myaccomodationapp.domain.usecase
 
 import com.madassignment.myaccomodationapp.domain.model.ChatMessage
+import com.madassignment.myaccomodationapp.domain.model.ChatThread
 import com.madassignment.myaccomodationapp.domain.repository.ChatRepository
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
+
+class ObserveChatThreadsUseCase @Inject constructor(
+    private val chatRepository: ChatRepository,
+) {
+    operator fun invoke(userId: String): Flow<List<ChatThread>> =
+        chatRepository.observeThreadsForUser(userId)
+}
 
 class ObserveChatMessagesUseCase @Inject constructor(
     private val chatRepository: ChatRepository,

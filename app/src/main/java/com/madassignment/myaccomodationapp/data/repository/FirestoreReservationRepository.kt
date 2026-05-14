@@ -3,6 +3,7 @@ package com.madassignment.myaccomodationapp.data.repository
 import com.madassignment.myaccomodationapp.data.mapper.toReservationOrNull
 import com.madassignment.myaccomodationapp.data.util.ReceiptNumbers
 import com.madassignment.myaccomodationapp.domain.exception.BookingConflictException
+import com.madassignment.myaccomodationapp.domain.model.ChatIds
 import com.madassignment.myaccomodationapp.domain.model.ListingStatus
 import com.madassignment.myaccomodationapp.domain.model.Reservation
 import com.madassignment.myaccomodationapp.domain.repository.ReservationRepository
@@ -53,6 +54,40 @@ class FirestoreReservationRepository @Inject constructor(
                     "timestamp" to FieldValue.serverTimestamp(),
                 ),
             )
+
+            val providerId = listingSnap.getString("providerId")
+            val listingTitle = listingSnap.getString("title").orEmpty()
+            if (!providerId.isNullOrBlank()) {
+                val chatId = ChatIds.forStudentAndProvider(userId, providerId)
+                val chatRef = firestore.collection("chats").document(chatId)
+                val depositText =
+                    "I paid the deposit (P${depositAmount.toInt()}) for \"$listingTitle\". Receipt: $receipt"
+                transaction.set(
+                    chatRef,
+                    mapOf(
+                        "chatId" to chatId,
+                        "participantIds" to listOf(userId, providerId).sorted(),
+                        "lastMessageText" to depositText,
+                        "lastSenderId" to userId,
+                        "lastMessageAt" to FieldValue.serverTimestamp(),
+                        "lastActivityAt" to FieldValue.serverTimestamp(),
+                        "unread" to mapOf(providerId to 1),
+                    ),
+                    com.google.firebase.firestore.SetOptions.merge(),
+                )
+                val messageRef = chatRef.collection("messages").document()
+                transaction.set(
+                    messageRef,
+                    mapOf(
+                        "chatId" to chatId,
+                        "senderId" to userId,
+                        "text" to depositText,
+                        "sentAt" to FieldValue.serverTimestamp(),
+                        "readBy" to listOf(userId),
+                    ),
+                )
+            }
+
             Reservation(
                 id = reservationRef.id,
                 listingId = listingId,

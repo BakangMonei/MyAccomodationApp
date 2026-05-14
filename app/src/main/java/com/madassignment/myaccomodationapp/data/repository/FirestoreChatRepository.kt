@@ -1,7 +1,9 @@
 package com.madassignment.myaccomodationapp.data.repository
 
 import com.madassignment.myaccomodationapp.data.mapper.toChatMessageOrNull
+import com.madassignment.myaccomodationapp.data.mapper.toChatThreadOrNull
 import com.madassignment.myaccomodationapp.domain.model.ChatMessage
+import com.madassignment.myaccomodationapp.domain.model.ChatThread
 import com.madassignment.myaccomodationapp.domain.repository.ChatRepository
 import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FieldValue
@@ -19,6 +21,22 @@ import javax.inject.Singleton
 class FirestoreChatRepository @Inject constructor(
     private val firestore: FirebaseFirestore,
 ) : ChatRepository {
+
+    override fun observeThreadsForUser(userId: String): Flow<List<ChatThread>> = callbackFlow {
+        val reg = firestore.collection("chats")
+            .whereArrayContains("participantIds", userId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+                val items = snapshot?.documents.orEmpty()
+                    .mapNotNull { it.toChatThreadOrNull(userId) }
+                    .sortedByDescending { it.lastMessageAt }
+                trySend(items)
+            }
+        awaitClose { reg.remove() }
+    }
 
     override fun observeMessages(chatId: String): Flow<List<ChatMessage>> = callbackFlow {
         // INDEX REQUIRED: chats/{chatId}/messages (sentAt ASC)
@@ -47,6 +65,9 @@ class FirestoreChatRepository @Inject constructor(
             mapOf(
                 "chatId" to chatId,
                 "participantIds" to participants,
+                "lastMessageText" to text,
+                "lastSenderId" to senderId,
+                "lastMessageAt" to FieldValue.serverTimestamp(),
                 "lastActivityAt" to FieldValue.serverTimestamp(),
             ),
             SetOptions.merge(),

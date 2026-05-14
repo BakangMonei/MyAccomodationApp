@@ -1,6 +1,7 @@
 package com.madassignment.myaccomodationapp.data.mapper
 
 import com.madassignment.myaccomodationapp.domain.model.ChatMessage
+import com.madassignment.myaccomodationapp.domain.model.ChatThread
 import com.madassignment.myaccomodationapp.domain.model.Listing
 import com.madassignment.myaccomodationapp.domain.model.ListingStatus
 import com.madassignment.myaccomodationapp.domain.model.Reservation
@@ -18,11 +19,11 @@ fun Instant.toTimestamp(): Timestamp = Timestamp(epochSecond, nano)
 
 fun DocumentSnapshot.toUserProfileOrNull(): UserProfile? {
     val uid = id
-    val email = getString("email") ?: return null
+    val email = getString("email").orEmpty()
     val displayName = getString("displayName") ?: ""
-    val roleWire = getString("role") ?: return null
-    val role = runCatching { UserRole.valueOf(roleWire) }.getOrNull() ?: return null
-    val createdAtTs = getTimestamp("createdAt") ?: return null
+    val roleWire = getString("role")
+    val role = roleWire?.let { runCatching { UserRole.valueOf(it) }.getOrNull() } ?: UserRole.Student
+    val createdAt = getTimestamp("createdAt")?.toInstant() ?: Instant.now()
     val prefsMap = get("preferences") as? Map<*, *> ?: emptyMap<String, Any?>()
     val preferences = prefsMap.toUserPreferences()
     return UserProfile(
@@ -30,7 +31,7 @@ fun DocumentSnapshot.toUserProfileOrNull(): UserProfile? {
         email = email,
         displayName = displayName,
         role = role,
-        createdAt = createdAtTs.toInstant(),
+        createdAt = createdAt,
         preferences = preferences,
     )
 }
@@ -141,4 +142,27 @@ fun DocumentSnapshot.toChatMessageOrNull(): ChatMessage? {
     val sent = getTimestamp("sentAt") ?: return null
     val readBy = (get("readBy") as? List<*>)?.mapNotNull { it?.toString() } ?: emptyList()
     return ChatMessage(id, chatId, sender, text, sent.toInstant(), readBy)
+}
+
+fun DocumentSnapshot.toChatThreadOrNull(userId: String): ChatThread? {
+    val chatId = getString("chatId") ?: id
+    val participantIds =
+        (get("participantIds") as? List<*>)?.mapNotNull { it?.toString() } ?: return null
+    if (!participantIds.contains(userId)) return null
+    val lastMessageAt =
+        getTimestamp("lastMessageAt")?.toInstant()
+            ?: getTimestamp("lastActivityAt")?.toInstant()
+            ?: Instant.now()
+    val lastMessageText = getString("lastMessageText").orEmpty()
+    val lastSenderId = getString("lastSenderId")
+    val unreadMap = get("unread") as? Map<*, *> ?: emptyMap<String, Any>()
+    val unreadCount = (unreadMap[userId] as? Number)?.toInt() ?: 0
+    return ChatThread(
+        chatId = chatId,
+        participantIds = participantIds,
+        lastMessageText = lastMessageText,
+        lastSenderId = lastSenderId,
+        lastMessageAt = lastMessageAt,
+        unreadCount = unreadCount,
+    )
 }

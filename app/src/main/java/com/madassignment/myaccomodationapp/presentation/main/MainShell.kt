@@ -29,7 +29,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.madassignment.myaccomodationapp.domain.model.UserRole
-import com.madassignment.myaccomodationapp.presentation.chat.ChatsPlaceholder
+import com.madassignment.myaccomodationapp.presentation.chat.ChatsRoute
 import com.madassignment.myaccomodationapp.presentation.home.HomeRoute
 import com.madassignment.myaccomodationapp.presentation.navigation.Routes
 import com.madassignment.myaccomodationapp.presentation.profile.ProfileRoute
@@ -101,7 +101,11 @@ fun MainShell(
                     onOpenListing = { id -> rootNav.navigate(Routes.listingDetail(id)) },
                     modifier = Modifier.fillMaxSize(),
                 )
-                1 -> ChatsPlaceholder(Modifier.fillMaxSize())
+                1 -> ChatsRoute(
+                    onNavigateToAuth = onNavigateToAuth,
+                    onOpenChat = { chatId, peerId -> rootNav.navigate(Routes.chat(chatId, peerId)) },
+                    modifier = Modifier.fillMaxSize(),
+                )
                 2 -> ProfileRoute(
                     onNavigateToAuth = onNavigateToAuth,
                     modifier = Modifier.fillMaxSize()

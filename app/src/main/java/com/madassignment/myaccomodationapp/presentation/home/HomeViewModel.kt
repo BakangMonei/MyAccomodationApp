@@ -50,6 +50,9 @@ class HomeViewModel @Inject constructor(
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
+    /** Signed-in user id for partitioning home list (guest = null). */
+    val currentUserId: StateFlow<String?> get() = authUid
+
     val userProfile = authUid
         .filterNotNull()
         .flatMapLatest { uid -> observeUserProfile(uid) }

@@ -133,7 +133,26 @@ fun DocumentSnapshot.toReservationOrNull(): Reservation? {
     val ts = getTimestamp("timestamp") ?: return null
     val providerId = getString("providerId")
     val payerEmail = getString("payerEmail")
-    return Reservation(id, listingId, userId, amount, receipt, ts.toInstant(), providerId, payerEmail)
+    val listingTitle = getString("listingTitle").orEmpty()
+    val depositAmount = (get("depositAmount") as? Number)?.toDouble() ?: amount
+    val balanceAmount = (get("balanceAmount") as? Number)?.toDouble() ?: 0.0
+    val balanceReceipt = getString("balanceReceiptNumber")
+    val balancePaidAt = getTimestamp("balancePaidAt")?.toInstant()
+    return Reservation(
+        id = id,
+        listingId = listingId,
+        userId = userId,
+        amount = amount,
+        receiptNumber = receipt,
+        timestamp = ts.toInstant(),
+        providerId = providerId,
+        payerEmail = payerEmail,
+        listingTitle = listingTitle,
+        depositAmount = depositAmount,
+        balanceAmount = balanceAmount,
+        balanceReceiptNumber = balanceReceipt,
+        balancePaidAt = balancePaidAt,
+    )
 }
 
 fun DocumentSnapshot.toChatMessageOrNull(): ChatMessage? {

@@ -18,8 +18,10 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -49,6 +51,19 @@ fun MainShell(
         rootNav.navigate(Routes.AUTH) {
             popUpTo(rootNav.graph.id) { inclusive = true }
         }
+    }
+
+    val mainEntry = remember(rootNav) { rootNav.getBackStackEntry(Routes.MAIN) }
+    val pendingMainTab by mainEntry.savedStateHandle
+        .getStateFlow<Int?>("pendingMainTab", null)
+        .collectAsStateWithLifecycle()
+
+    LaunchedEffect(pendingMainTab) {
+        val t = pendingMainTab ?: return@LaunchedEffect
+        if (t in 0..3) {
+            tab = t
+        }
+        mainEntry.savedStateHandle.remove<Int>("pendingMainTab")
     }
 
     Scaffold(

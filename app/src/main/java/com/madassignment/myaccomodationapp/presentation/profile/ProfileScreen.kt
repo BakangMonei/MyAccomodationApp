@@ -121,9 +121,22 @@ fun ProfileRoute(
             items(reservations, key = { it.id }) { res ->
                 Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                     Column(Modifier.padding(12.dp)) {
-                        Text("Receipt ${res.receiptNumber}", style = MaterialTheme.typography.titleSmall)
-                        Text("Listing ID: ${res.listingId}", style = MaterialTheme.typography.bodySmall)
-                        Text("Amount paid: P${res.amount.toInt()}", color = MaterialTheme.colorScheme.primary)
+                        val title = res.listingTitle.ifBlank { "Listing" }
+                        Text(title, style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            if (res.isFullyPaid) "Fully paid" else "Balance due: P${res.balanceAmount.toInt()}",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = if (res.isFullyPaid) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary,
+                        )
+                        Text("Deposit receipt: ${res.receiptNumber} · P${res.depositAmount.toInt()}", style = MaterialTheme.typography.bodySmall)
+                        if (res.balanceReceiptNumber != null) {
+                            Text(
+                                "Balance receipt: ${res.balanceReceiptNumber} · P${res.balanceAmount.toInt()}",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        Text("Total paid: P${res.amount.toInt()}", style = MaterialTheme.typography.bodyMedium)
+                        Text("Listing ID: ${res.listingId}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }

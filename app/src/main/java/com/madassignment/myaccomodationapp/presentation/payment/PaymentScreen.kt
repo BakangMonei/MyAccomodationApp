@@ -6,8 +6,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -18,18 +20,21 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PaymentRoute(
     onBack: () -> Unit,
-    onReceiptDone: () -> Unit,
+    onFlowFinishedNavigateToProfile: () -> Unit,
     paymentViewModel: PaymentViewModel = hiltViewModel(),
 ) {
     val listing by paymentViewModel.listing.collectAsStateWithLifecycle()
@@ -38,7 +43,7 @@ fun PaymentRoute(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Sandbox payment") },
+                title = { Text("Payment") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -61,26 +66,88 @@ fun PaymentRoute(
                     "Deposit due: P${l.depositAmount.toInt()}",
                     style = MaterialTheme.typography.headlineSmall,
                 )
+                if (ui !is PaymentUiState.AwaitingBalance && ui !is PaymentUiState.Complete) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Balance after deposit: P${(l.price - l.depositAmount).coerceAtLeast(0.0).toInt()} (first month remainder)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                    )
+                }
                 Spacer(Modifier.height(24.dp))
                 when (val state = ui) {
                     PaymentUiState.Idle -> {
                         Button(
-                            onClick = { paymentViewModel.pay(l.depositAmount) },
+                            onClick = { paymentViewModel.payDeposit(l.depositAmount) },
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Text("Pay deposit (sandbox)")
                         }
                     }
-                    PaymentUiState.Processing -> {
+                    PaymentUiState.ProcessingDeposit -> {
                         CircularProgressIndicator()
                     }
-                    is PaymentUiState.Success -> {
+                    is PaymentUiState.AwaitingBalance -> {
                         val r = state.reservation
-                        Text("Payment successful", style = MaterialTheme.typography.titleMedium)
-                        Text("Receipt: ${r.receiptNumber}", style = MaterialTheme.typography.bodyLarge)
-                        Text("Amount: P${r.amount.toInt()}")
+                        Text(
+                            "Deposit paid · Receipt: ${r.receiptNumber}",
+                            style = MaterialTheme.typography.titleSmall,
+                        )
+                        Text("Amount paid: P${r.depositAmount.toInt()}")
                         Spacer(Modifier.height(16.dp))
-                        Button(onClick = onReceiptDone) { Text("Done") }
+                        Text(
+                            "Balance due: P${r.balanceAmount.toInt()}",
+                            style = MaterialTheme.typography.headlineSmall,
+                        )
+                        Spacer(Modifier.height(16.dp))
+                        Button(
+                            onClick = { paymentViewModel.payBalance() },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Pay balance (sandbox)")
+                        }
+                    }
+                    PaymentUiState.ProcessingBalance -> {
+                        CircularProgressIndicator()
+                    }
+                    is PaymentUiState.Complete -> {
+                        val r = state.reservation
+                        LaunchedEffect(r.id, r.balanceReceiptNumber) {
+                            delay(3000)
+                            onFlowFinishedNavigateToProfile()
+                        }
+                        Icon(
+                            Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            modifier = Modifier.size(72.dp),
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            "All set!",
+                            style = MaterialTheme.typography.headlineSmall,
+                        )
+                        Text(
+                            "Your booking is complete.",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(16.dp))
+                        Text("Deposit receipt: ${r.receiptNumber}", style = MaterialTheme.typography.bodyMedium)
+                        if (r.balanceReceiptNumber != null) {
+                            Text(
+                                "Balance receipt: ${r.balanceReceiptNumber}",
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
+                        Text("Total paid: P${r.amount.toInt()}", style = MaterialTheme.typography.titleMedium)
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Opening your profile…",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                     is PaymentUiState.Error -> {
                         Text(state.message, color = MaterialTheme.colorScheme.error)

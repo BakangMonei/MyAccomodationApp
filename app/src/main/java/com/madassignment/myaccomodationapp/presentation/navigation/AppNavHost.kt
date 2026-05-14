@@ -72,7 +72,8 @@ fun AccommodationNavHost() {
         ) {
             PaymentRoute(
                 onBack = { navController.popBackStack() },
-                onReceiptDone = {
+                onFlowFinishedNavigateToProfile = {
+                    navController.getBackStackEntry(Routes.MAIN).savedStateHandle["pendingMainTab"] = 2
                     navController.popBackStack()
                     navController.popBackStack()
                 },

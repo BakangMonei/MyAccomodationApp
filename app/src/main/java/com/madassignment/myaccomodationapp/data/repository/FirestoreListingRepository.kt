@@ -64,8 +64,12 @@ class FirestoreListingRepository @Inject constructor(
     ): Flow<List<Listing>> = callbackFlow {
         // We use a query that is guaranteed to work without custom composite indexes
         // price filtering and secondary sorting are handled client-side for maximum reliability
+        // Single-field whereIn works without a composite index; client-side filter + sort as before.
         val query = firestore.collection(COLLECTION)
-            .whereEqualTo("status", ListingStatus.Available.wireValue)
+            .whereIn(
+                "status",
+                listOf(ListingStatus.Available.wireValue, ListingStatus.Reserved.wireValue),
+            )
             .limit(limit)
 
         val reg = query.addSnapshotListener { snapshot, error ->
@@ -91,7 +95,10 @@ class FirestoreListingRepository @Inject constructor(
     private fun buildBaseQuery(filters: ListingFilters): Query {
         // Simple base query for pagination support
         return firestore.collection(COLLECTION)
-            .whereEqualTo("status", ListingStatus.Available.wireValue)
+            .whereIn(
+                "status",
+                listOf(ListingStatus.Available.wireValue, ListingStatus.Reserved.wireValue),
+            )
     }
 
     override fun observeListing(listingId: String): Flow<Listing?> = callbackFlow {

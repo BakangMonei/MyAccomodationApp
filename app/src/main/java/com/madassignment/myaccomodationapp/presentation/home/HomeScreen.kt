@@ -59,6 +59,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.madassignment.myaccomodationapp.domain.model.GaboroneRegion
 import com.madassignment.myaccomodationapp.domain.model.ListingFilters
+import com.madassignment.myaccomodationapp.domain.model.ListingStatus
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -71,6 +72,7 @@ fun HomeRoute(
     val applied by viewModel.appliedFilters.collectAsStateWithLifecycle()
     val listings by viewModel.listings.collectAsStateWithLifecycle()
     val takenByMe by viewModel.takenByMeListings.collectAsStateWithLifecycle()
+    val currentUserId by viewModel.currentUserId.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     var sheetOpen by remember { mutableStateOf(false) }
 
@@ -186,7 +188,17 @@ fun HomeRoute(
                     }
                 }
                 else -> {
-                    val data = listings!!
+                    val raw = listings!!
+                    val availableOnly = remember(raw, currentUserId) {
+                        raw.filter { it.status == ListingStatus.Available }
+                    }
+                    val houseTakenOthers = remember(raw, currentUserId) {
+                        raw.filter {
+                            it.status == ListingStatus.Reserved &&
+                                !it.reservedBy.isNullOrBlank() &&
+                                it.reservedBy != currentUserId
+                        }
+                    }
                     LazyColumn(
                         Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -215,6 +227,29 @@ fun HomeRoute(
                                 )
                             }
                         }
+                        if (houseTakenOthers.isNotEmpty()) {
+                            item {
+                                Column(Modifier.padding(horizontal = 16.dp)) {
+                                    Text(
+                                        "House taken",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                    Spacer(Modifier.height(8.dp))
+                                }
+                            }
+                            items(
+                                count = houseTakenOthers.size,
+                                key = { "house-taken-${houseTakenOthers[it].id}" },
+                            ) { index ->
+                                val item = houseTakenOthers[index]
+                                ListingCard(
+                                    listing = item,
+                                    onClick = { onOpenListing(item.id) },
+                                    badgeText = "House Taken",
+                                )
+                            }
+                        }
                         item {
                             Row(
                                 Modifier.padding(horizontal = 16.dp),
@@ -228,17 +263,17 @@ fun HomeRoute(
                                     modifier = Modifier.size(18.dp),
                                 )
                                 Text(
-                                    "${data.size} rooms available now",
+                                    "${availableOnly.size} rooms available now",
                                     style = MaterialTheme.typography.labelLarge,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         }
                         items(
-                            count = data.size,
-                            key = { data[it].id },
+                            count = availableOnly.size,
+                            key = { "avail-${availableOnly[it].id}" },
                         ) { index ->
-                            val item = data[index]
+                            val item = availableOnly[index]
                             ListingCard(item) { onOpenListing(item.id) }
                         }
                     }

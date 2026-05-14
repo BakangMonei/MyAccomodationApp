@@ -6,6 +6,8 @@ import kotlinx.coroutines.flow.Flow
 interface ReservationRepository {
     suspend fun reserveListing(listingId: String, userId: String, depositAmount: Double): Result<Reservation>
 
+    suspend fun payReservationBalance(reservationId: String, userId: String): Result<Reservation>
+
     fun observeReservationsForUser(userId: String): Flow<List<Reservation>>
 
     fun observeReservationsForProvider(providerId: String): Flow<List<Reservation>>

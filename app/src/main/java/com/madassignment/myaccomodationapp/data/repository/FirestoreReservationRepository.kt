@@ -1,5 +1,6 @@
 package com.madassignment.myaccomodationapp.data.repository
 
+import com.madassignment.myaccomodationapp.data.mapper.toInstant
 import com.madassignment.myaccomodationapp.data.mapper.toReservationOrNull
 import com.madassignment.myaccomodationapp.data.util.ReceiptNumbers
 import com.madassignment.myaccomodationapp.domain.exception.BookingConflictException
@@ -40,6 +41,9 @@ class FirestoreReservationRepository @Inject constructor(
             val userRef = firestore.collection("users").document(userId)
             val userSnap = transaction.get(userRef)
             val payerEmail = userSnap.getString("email")
+            val listingTitle = listingSnap.getString("title").orEmpty()
+            val monthlyPrice = (listingSnap.get("price") as? Number)?.toDouble() ?: 0.0
+            val balanceDue = (monthlyPrice - depositAmount).coerceAtLeast(0.0)
             transaction.update(
                 listingRef,
                 mapOf(
@@ -58,11 +62,13 @@ class FirestoreReservationRepository @Inject constructor(
                     "timestamp" to FieldValue.serverTimestamp(),
                     "providerId" to listingSnap.getString("providerId"),
                     "payerEmail" to payerEmail,
+                    "listingTitle" to listingTitle,
+                    "depositAmount" to depositAmount,
+                    "balanceAmount" to balanceDue,
                 ),
             )
 
             val providerId = listingSnap.getString("providerId")
-            val listingTitle = listingSnap.getString("title").orEmpty()
             if (!providerId.isNullOrBlank()) {
                 val providerRef = firestore.collection("users").document(providerId)
                 val providerSnap = transaction.get(providerRef)
@@ -114,6 +120,123 @@ class FirestoreReservationRepository @Inject constructor(
                 timestamp = Instant.now(),
                 providerId = providerId,
                 payerEmail = payerEmail,
+                listingTitle = listingTitle,
+                depositAmount = depositAmount,
+                balanceAmount = balanceDue,
+                balanceReceiptNumber = null,
+                balancePaidAt = null,
+            )
+        }.await()
+    }
+
+    override suspend fun payReservationBalance(
+        reservationId: String,
+        userId: String,
+    ): Result<Reservation> = runCatching {
+        firestore.runTransaction { transaction ->
+            val reservationRef = firestore.collection("reservations").document(reservationId)
+            val resSnap = transaction.get(reservationRef)
+            if (!resSnap.exists()) {
+                throw IllegalStateException("Reservation not found")
+            }
+            if (resSnap.getString("userId") != userId) {
+                throw IllegalStateException("Not your reservation")
+            }
+            if (resSnap.getString("balanceReceiptNumber") != null) {
+                throw IllegalStateException("Balance already paid")
+            }
+            val listingId = resSnap.getString("listingId")
+                ?: throw IllegalStateException("Missing listing")
+            val balanceAmountStored = (resSnap.get("balanceAmount") as? Number)?.toDouble() ?: 0.0
+            if (balanceAmountStored <= 0) {
+                throw IllegalStateException("No balance due")
+            }
+            val listingRef = firestore.collection("listings").document(listingId)
+            val listingSnap = transaction.get(listingRef)
+            if (listingSnap.getString("status") != ListingStatus.Reserved.wireValue) {
+                throw IllegalStateException("Listing is no longer reserved")
+            }
+            if (listingSnap.getString("reservedBy") != userId) {
+                throw IllegalStateException("Listing reservation mismatch")
+            }
+
+            val balanceReceipt = ReceiptNumbers.next(Instant.now())
+            val depositAmount = (resSnap.get("depositAmount") as? Number)?.toDouble()
+                ?: (resSnap.get("amount") as? Number)?.toDouble() ?: 0.0
+            val currentPaid = (resSnap.get("amount") as? Number)?.toDouble() ?: depositAmount
+            val newTotalPaid = currentPaid + balanceAmountStored
+
+            transaction.update(
+                reservationRef,
+                mapOf(
+                    "amount" to newTotalPaid,
+                    "balanceReceiptNumber" to balanceReceipt,
+                    "balancePaidAt" to FieldValue.serverTimestamp(),
+                ),
+            )
+
+            val payerEmail = resSnap.getString("payerEmail")
+            val listingTitle = resSnap.getString("listingTitle").orEmpty()
+            val providerId = resSnap.getString("providerId")
+            val depositReceipt = resSnap.getString("receiptNumber")
+                ?: throw IllegalStateException("Missing receipt")
+            if (!providerId.isNullOrBlank()) {
+                val providerRef = firestore.collection("users").document(providerId)
+                val providerSnap = transaction.get(providerRef)
+                val providerEmail = providerSnap.getString("email")
+                val chatId = ChatIds.forStudentAndProvider(userId, providerId)
+                val chatRef = firestore.collection("chats").document(chatId)
+                val balanceText =
+                    "I paid the balance (P${balanceAmountStored.toInt()}) for \"$listingTitle\". Receipt: $balanceReceipt (deposit receipt: $depositReceipt)"
+                transaction.set(
+                    chatRef,
+                    mapOf(
+                        "chatId" to chatId,
+                        "participantIds" to listOf(userId, providerId).sorted(),
+                        "lastMessageText" to balanceText,
+                        "lastSenderId" to userId,
+                        "lastMessageAt" to FieldValue.serverTimestamp(),
+                        "lastActivityAt" to FieldValue.serverTimestamp(),
+                        "participantEmails" to mapOf(
+                            userId to (payerEmail ?: ""),
+                            providerId to (providerEmail ?: ""),
+                        ),
+                    ),
+                    SetOptions.merge(),
+                )
+                val messageRef = chatRef.collection("messages").document()
+                transaction.set(
+                    messageRef,
+                    mapOf(
+                        "chatId" to chatId,
+                        "senderId" to userId,
+                        "text" to balanceText,
+                        "sentAt" to FieldValue.serverTimestamp(),
+                        "readBy" to listOf(userId),
+                    ),
+                )
+                transaction.update(
+                    chatRef,
+                    com.google.firebase.firestore.FieldPath.of("unread", providerId),
+                    FieldValue.increment(1),
+                )
+            }
+
+            val createdInstant = resSnap.getTimestamp("timestamp")?.toInstant() ?: Instant.now()
+            Reservation(
+                id = reservationId,
+                listingId = listingId,
+                userId = userId,
+                amount = newTotalPaid,
+                receiptNumber = depositReceipt,
+                timestamp = createdInstant,
+                providerId = providerId,
+                payerEmail = payerEmail,
+                listingTitle = listingTitle,
+                depositAmount = depositAmount,
+                balanceAmount = balanceAmountStored,
+                balanceReceiptNumber = balanceReceipt,
+                balancePaidAt = Instant.now(),
             )
         }.await()
     }

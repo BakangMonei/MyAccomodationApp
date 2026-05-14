@@ -54,6 +54,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.madassignment.myaccomodationapp.domain.model.GaboroneRegion
+import com.madassignment.myaccomodationapp.domain.model.ListingStatus
 import java.time.Instant
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -63,6 +64,7 @@ fun ProviderDashboardRoute(
     viewModel: ProviderDashboardViewModel = hiltViewModel(),
 ) {
     val listings by viewModel.myListings.collectAsStateWithLifecycle()
+    val recentPayments by viewModel.recentPayments.collectAsStateWithLifecycle()
     val publishing by viewModel.publishing.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
 
@@ -292,6 +294,34 @@ fun ProviderDashboardRoute(
                 Spacer(Modifier.height(8.dp))
                 Text("Your listings", style = MaterialTheme.typography.titleLarge)
             }
+            if (recentPayments.isNotEmpty()) {
+                item {
+                    Spacer(Modifier.height(8.dp))
+                    Text("Recent payments", style = MaterialTheme.typography.titleLarge)
+                }
+                items(recentPayments, key = { it.id }) { payment ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                        ),
+                    ) {
+                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                "Receipt: ${payment.receiptNumber}",
+                                style = MaterialTheme.typography.titleSmall,
+                            )
+                            Text("Amount: P${payment.amount.toInt()}")
+                            Text("Payer: ${payment.payerEmail ?: payment.userId}")
+                            Text(
+                                "Listing ID: ${payment.listingId}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
             items(listings, key = { it.id }) { listing ->
                 ProviderListingCard(listing = listing)
             }
@@ -329,6 +359,13 @@ private fun ProviderListingCard(
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.primary,
             )
+            if (listing.status == ListingStatus.Reserved) {
+                Text(
+                    "Reserved${listing.reservedBy?.let { " by $it" } ?: ""}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.tertiary,
+                )
+            }
         }
     }
 }

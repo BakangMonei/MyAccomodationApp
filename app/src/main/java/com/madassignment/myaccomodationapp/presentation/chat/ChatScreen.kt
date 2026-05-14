@@ -48,6 +48,7 @@ fun ChatRoute(
 ) {
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val me by viewModel.authUid.collectAsStateWithLifecycle()
+    val peerEmail by viewModel.peerEmail.collectAsStateWithLifecycle()
     var draft by rememberSaveable { mutableStateOf("") }
     val listState = rememberLazyListState()
 
@@ -60,7 +61,7 @@ fun ChatRoute(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Chat") },
+                title = { Text(peerEmail ?: "Chat") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")

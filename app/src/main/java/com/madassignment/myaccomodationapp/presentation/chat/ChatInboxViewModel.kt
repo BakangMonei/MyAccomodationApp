@@ -43,10 +43,11 @@ class ChatInboxViewModel @Inject constructor(
                     threads.map { thread ->
                         val peerId =
                             thread.participantIds.firstOrNull { participant -> participant != uid } ?: uid
+                        val peerEmail = thread.participantEmails[peerId]?.ifBlank { null }
                         ChatPreview(
                             chatId = thread.chatId,
                             peerId = peerId,
-                            peerLabel = "User ${peerId.take(6)}",
+                            peerLabel = peerEmail ?: "User ${peerId.take(6)}",
                             lastMessageText = thread.lastMessageText.ifBlank { "Start the conversation" },
                             unreadCount = thread.unreadCount,
                             lastMessageEpochMs = thread.lastMessageAt.toEpochMilli(),

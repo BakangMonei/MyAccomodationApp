@@ -8,11 +8,13 @@ import com.madassignment.myaccomodationapp.domain.model.ChatMessage
 import com.madassignment.myaccomodationapp.domain.usecase.ClearChatUnreadUseCase
 import com.madassignment.myaccomodationapp.domain.usecase.ObserveAuthStateUseCase
 import com.madassignment.myaccomodationapp.domain.usecase.ObserveChatMessagesUseCase
+import com.madassignment.myaccomodationapp.domain.usecase.ObserveUserProfileUseCase
 import com.madassignment.myaccomodationapp.domain.usecase.SendChatMessageUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -22,6 +24,7 @@ class ChatViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     observeChatMessages: ObserveChatMessagesUseCase,
     observeAuthState: ObserveAuthStateUseCase,
+    observeUserProfile: ObserveUserProfileUseCase,
     private val sendChatMessage: SendChatMessageUseCase,
     private val clearChatUnread: ClearChatUnreadUseCase,
 ) : ViewModel() {
@@ -36,6 +39,10 @@ class ChatViewModel @Inject constructor(
 
     val messages: StateFlow<List<ChatMessage>> = observeChatMessages(chatId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val peerEmail: StateFlow<String?> = observeUserProfile(peerId)
+        .map { it?.email?.ifBlank { null } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     init {
         viewModelScope.launch {

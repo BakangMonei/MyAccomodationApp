@@ -131,7 +131,9 @@ fun DocumentSnapshot.toReservationOrNull(): Reservation? {
     val amount = (get("amount") as? Number)?.toDouble() ?: return null
     val receipt = getString("receiptNumber") ?: return null
     val ts = getTimestamp("timestamp") ?: return null
-    return Reservation(id, listingId, userId, amount, receipt, ts.toInstant())
+    val providerId = getString("providerId")
+    val payerEmail = getString("payerEmail")
+    return Reservation(id, listingId, userId, amount, receipt, ts.toInstant(), providerId, payerEmail)
 }
 
 fun DocumentSnapshot.toChatMessageOrNull(): ChatMessage? {
@@ -157,9 +159,18 @@ fun DocumentSnapshot.toChatThreadOrNull(userId: String): ChatThread? {
     val lastSenderId = getString("lastSenderId")
     val unreadMap = get("unread") as? Map<*, *> ?: emptyMap<String, Any>()
     val unreadCount = (unreadMap[userId] as? Number)?.toInt() ?: 0
+    val participantEmailsRaw = get("participantEmails") as? Map<*, *> ?: emptyMap<String, Any>()
+    val participantEmails = participantEmailsRaw
+        .mapNotNull { (key, value) ->
+            val k = key?.toString() ?: return@mapNotNull null
+            val v = value?.toString() ?: return@mapNotNull null
+            k to v
+        }
+        .toMap()
     return ChatThread(
         chatId = chatId,
         participantIds = participantIds,
+        participantEmails = participantEmails,
         lastMessageText = lastMessageText,
         lastSenderId = lastSenderId,
         lastMessageAt = lastMessageAt,

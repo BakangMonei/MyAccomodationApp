@@ -70,6 +70,7 @@ fun HomeRoute(
 ) {
     val applied by viewModel.appliedFilters.collectAsStateWithLifecycle()
     val listings by viewModel.listings.collectAsStateWithLifecycle()
+    val takenByMe by viewModel.takenByMeListings.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     var sheetOpen by remember { mutableStateOf(false) }
 
@@ -124,28 +125,62 @@ fun HomeRoute(
                     }
                 }
                 listings!!.isEmpty() -> {
-                    Box(
-                        Modifier
-                            .fillMaxSize()
-                            .padding(32.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                "No listings found",
-                                style = MaterialTheme.typography.titleMedium,
-                            )
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                "Try adjusting your filters or price range.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Spacer(Modifier.height(16.dp))
-                            Button(onClick = {
-                                viewModel.applyFilters(ListingFilters(0.0, 10_000.0, emptyList(), emptyList(), null))
-                            }) {
-                                Text("Reset filters")
+                    if (takenByMe.isNotEmpty()) {
+                        LazyColumn(
+                            Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 20.dp),
+                        ) {
+                            item {
+                                Text(
+                                    "Taken by me",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                            items(
+                                count = takenByMe.size,
+                                key = { "taken-empty-${takenByMe[it].id}" },
+                            ) { index ->
+                                val item = takenByMe[index]
+                                ListingCard(
+                                    listing = item,
+                                    onClick = { onOpenListing(item.id) },
+                                    badgeText = "Taken by me",
+                                )
+                            }
+                            item {
+                                Text(
+                                    "No other listings found right now.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    } else {
+                        Box(
+                            Modifier
+                                .fillMaxSize()
+                                .padding(32.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    "No listings found",
+                                    style = MaterialTheme.typography.titleMedium,
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                Text(
+                                    "Try adjusting your filters or price range.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Spacer(Modifier.height(16.dp))
+                                Button(onClick = {
+                                    viewModel.applyFilters(ListingFilters(0.0, 10_000.0, emptyList(), emptyList(), null))
+                                }) {
+                                    Text("Reset filters")
+                                }
                             }
                         }
                     }
@@ -157,6 +192,29 @@ fun HomeRoute(
                         verticalArrangement = Arrangement.spacedBy(14.dp),
                         contentPadding = PaddingValues(bottom = 24.dp),
                     ) {
+                        if (takenByMe.isNotEmpty()) {
+                            item {
+                                Column(Modifier.padding(horizontal = 16.dp)) {
+                                    Text(
+                                        "Taken by me",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                    Spacer(Modifier.height(8.dp))
+                                }
+                            }
+                            items(
+                                count = takenByMe.size,
+                                key = { "taken-${takenByMe[it].id}" },
+                            ) { index ->
+                                val item = takenByMe[index]
+                                ListingCard(
+                                    listing = item,
+                                    onClick = { onOpenListing(item.id) },
+                                    badgeText = "Taken by me",
+                                )
+                            }
+                        }
                         item {
                             Row(
                                 Modifier.padding(horizontal = 16.dp),
@@ -232,6 +290,7 @@ private fun ListingSkeleton() {
 @Composable
 private fun ListingCard(
     listing: com.madassignment.myaccomodationapp.domain.model.Listing,
+    badgeText: String? = null,
     onClick: () -> Unit,
 ) {
     Card(
@@ -289,6 +348,13 @@ private fun ListingCard(
                 )
             }
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (badgeText != null) {
+                    AssistChip(
+                        onClick = {},
+                        enabled = false,
+                        label = { Text(badgeText) },
+                    )
+                }
                 Text(
                     listing.title,
                     style = MaterialTheme.typography.titleMedium,

@@ -60,11 +60,17 @@ class FirestoreChatRepository @Inject constructor(
         text: String,
     ): Result<Unit> = runCatching {
         val participants = listOf(senderId, peerId).sorted()
+        val senderEmail = firestore.collection("users").document(senderId).get().await().getString("email").orEmpty()
+        val peerEmail = firestore.collection("users").document(peerId).get().await().getString("email").orEmpty()
         val chatRef = firestore.collection("chats").document(chatId)
         chatRef.set(
             mapOf(
                 "chatId" to chatId,
                 "participantIds" to participants,
+                "participantEmails" to mapOf(
+                    senderId to senderEmail,
+                    peerId to peerEmail,
+                ),
                 "lastMessageText" to text,
                 "lastSenderId" to senderId,
                 "lastMessageAt" to FieldValue.serverTimestamp(),

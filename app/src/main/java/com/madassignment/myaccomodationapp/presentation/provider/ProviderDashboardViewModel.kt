@@ -7,8 +7,10 @@ import com.madassignment.myaccomodationapp.data.repository.FirebaseListingImageU
 import com.madassignment.myaccomodationapp.domain.model.GaboroneRegion
 import com.madassignment.myaccomodationapp.domain.model.Listing
 import com.madassignment.myaccomodationapp.domain.model.ListingStatus
+import com.madassignment.myaccomodationapp.domain.model.Reservation
 import com.madassignment.myaccomodationapp.domain.usecase.ObserveAuthStateUseCase
 import com.madassignment.myaccomodationapp.domain.usecase.ObserveProviderListingsUseCase
+import com.madassignment.myaccomodationapp.domain.usecase.ObserveProviderReservationsUseCase
 import com.madassignment.myaccomodationapp.domain.usecase.UpsertListingUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -20,6 +22,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -31,6 +34,7 @@ import javax.inject.Inject
 class ProviderDashboardViewModel @Inject constructor(
     observeAuthState: ObserveAuthStateUseCase,
     private val observeProviderListings: ObserveProviderListingsUseCase,
+    private val observeProviderReservations: ObserveProviderReservationsUseCase,
     private val upsertListing: UpsertListingUseCase,
     private val imageUploader: FirebaseListingImageUploader,
 ) : ViewModel() {
@@ -43,6 +47,12 @@ class ProviderDashboardViewModel @Inject constructor(
         .filterNotNull()
         .flatMapLatest { observeProviderListings(it) }
         .map { list -> list.sortedByDescending { it.createdAt } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val recentPayments: StateFlow<List<Reservation>> = uidFlow
+        .flatMapLatest { uid ->
+            if (uid == null) flowOf(emptyList()) else observeProviderReservations(uid)
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val _publishing = MutableStateFlow(false)

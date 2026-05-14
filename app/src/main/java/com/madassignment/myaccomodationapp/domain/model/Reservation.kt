@@ -9,4 +9,6 @@ data class Reservation(
     val amount: Double,
     val receiptNumber: String,
     val timestamp: Instant,
+    val providerId: String? = null,
+    val payerEmail: String? = null,
 )

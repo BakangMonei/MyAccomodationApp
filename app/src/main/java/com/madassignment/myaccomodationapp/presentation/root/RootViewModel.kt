@@ -16,5 +16,5 @@ class RootViewModel @Inject constructor(
 ) : ViewModel() {
 
     val authUser: StateFlow<AuthUser?> = observeAuthState()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 }

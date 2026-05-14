@@ -1,5 +1,6 @@
 package com.madassignment.myaccomodationapp.data.repository
 
+import android.util.Log
 import com.madassignment.myaccomodationapp.data.mapper.toFirestoreMap
 import com.madassignment.myaccomodationapp.data.mapper.toListingOrNull
 import com.madassignment.myaccomodationapp.data.util.FirestoreCursors
@@ -61,44 +62,36 @@ class FirestoreListingRepository @Inject constructor(
         filters: ListingFilters,
         limit: Long,
     ): Flow<List<Listing>> = callbackFlow {
-        val reg = buildBaseQuery(filters)
+        // We use a query that is guaranteed to work without custom composite indexes
+        // price filtering and secondary sorting are handled client-side for maximum reliability
+        val query = firestore.collection(COLLECTION)
+            .whereEqualTo("status", ListingStatus.Available.wireValue)
             .limit(limit)
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    trySend(emptyList())
-                    return@addSnapshotListener
-                }
-                val items = snapshot?.documents.orEmpty()
-                    .asSequence()
-                    .mapNotNull { it.toListingOrNull() }
-                    .filter { filters.matches(it) }
-                    .sortedWith(compareBy<Listing> { it.price }.thenByDescending { it.createdAt })
-                    .toList()
-                trySend(items)
+
+        val reg = query.addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                Log.e("FirestoreListing", "Error fetching listings: ${error.message}", error)
+                // We do NOT send emptyList() here. If the listener fails, we just don't update.
+                // This prevents listings from "disappearing" on transient errors.
+                return@addSnapshotListener
             }
+            
+            val items = snapshot?.documents.orEmpty()
+                .asSequence()
+                .mapNotNull { it.toListingOrNull() }
+                .filter { filters.matches(it) }
+                .sortedWith(compareBy<Listing> { it.price }.thenByDescending { it.createdAt })
+                .toList()
+            
+            trySend(items)
+        }
         awaitClose { reg.remove() }
     }.distinctUntilChanged()
 
     private fun buildBaseQuery(filters: ListingFilters): Query {
-        // INDEX REQUIRED: listings — status == + price range + orderBy price ASC, createdAt DESC
-        // INDEX REQUIRED: listings — status + price range + location (equality OR whereIn) + orderBy price + createdAt
-        var query: Query = firestore.collection(COLLECTION)
+        // Simple base query for pagination support
+        return firestore.collection(COLLECTION)
             .whereEqualTo("status", ListingStatus.Available.wireValue)
-            .whereGreaterThanOrEqualTo("price", filters.minPrice)
-            .whereLessThanOrEqualTo("price", filters.maxPrice)
-
-        when (filters.locations.size) {
-            1 -> {
-                query = query.whereEqualTo("location", filters.locations.first())
-            }
-            in 2..10 -> {
-                query = query.whereIn("location", filters.locations)
-            }
-        }
-
-        return query
-            .orderBy("price", Query.Direction.ASCENDING)
-            .orderBy("createdAt", Query.Direction.DESCENDING)
     }
 
     override fun observeListing(listingId: String): Flow<Listing?> = callbackFlow {

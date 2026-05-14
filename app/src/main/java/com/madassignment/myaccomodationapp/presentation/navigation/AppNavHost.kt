@@ -24,19 +24,12 @@ fun AccommodationNavHost() {
     val user by rootViewModel.authUser.collectAsStateWithLifecycle()
 
     LaunchedEffect(user) {
-        if (user == null) {
-            val route = navController.currentDestination?.route
-            if (route != Routes.AUTH) {
-                navController.navigate(Routes.AUTH) {
-                    popUpTo(navController.graph.id) { inclusive = true }
-                }
-            }
-        }
+        // We allow null user (guest) on MAIN, but certain actions will require auth
     }
 
     NavHost(
         navController = navController,
-        startDestination = Routes.AUTH,
+        startDestination = Routes.MAIN,
     ) {
         composable(Routes.AUTH) {
             AuthRoute(
@@ -48,9 +41,7 @@ fun AccommodationNavHost() {
             )
         }
         composable(Routes.MAIN) {
-            if (user != null) {
-                MainShell(rootNav = navController)
-            }
+            MainShell(rootNav = navController)
         }
         composable(
             route = Routes.LISTING_DETAIL,
@@ -59,9 +50,19 @@ fun AccommodationNavHost() {
             DetailRoute(
                 authUid = user?.uid,
                 onBack = { navController.popBackStack() },
-                onReserve = { id -> navController.navigate(Routes.payment(id)) },
+                onReserve = { id ->
+                    if (user != null) {
+                        navController.navigate(Routes.payment(id))
+                    } else {
+                        navController.navigate(Routes.AUTH)
+                    }
+                },
                 onOpenChat = { chatId, peerId ->
-                    navController.navigate(Routes.chat(chatId, peerId))
+                    if (user != null) {
+                        navController.navigate(Routes.chat(chatId, peerId))
+                    } else {
+                        navController.navigate(Routes.AUTH)
+                    }
                 },
             )
         }

@@ -45,6 +45,12 @@ fun MainShell(
     val unread by mainViewModel.unreadChats.collectAsStateWithLifecycle()
     val isProvider = profile?.role == UserRole.Provider
 
+    val onNavigateToAuth = {
+        rootNav.navigate(Routes.AUTH) {
+            popUpTo(rootNav.graph.id) { inclusive = true }
+        }
+    }
+
     Scaffold(
         bottomBar = {
             NavigationBar {
@@ -96,11 +102,17 @@ fun MainShell(
                     modifier = Modifier.fillMaxSize(),
                 )
                 1 -> ChatsPlaceholder(Modifier.fillMaxSize())
-                2 -> ProfileRoute(Modifier.fillMaxSize())
+                2 -> ProfileRoute(
+                    onNavigateToAuth = onNavigateToAuth,
+                    modifier = Modifier.fillMaxSize()
+                )
                 3 -> if (isProvider) {
                     ProviderDashboardRoute(Modifier.fillMaxSize())
                 } else {
-                    ProfileRoute(Modifier.fillMaxSize())
+                    ProfileRoute(
+                        onNavigateToAuth = onNavigateToAuth,
+                        modifier = Modifier.fillMaxSize()
+                    )
                 }
                 else -> HomeRoute(
                     onOpenListing = { id -> rootNav.navigate(Routes.listingDetail(id)) },

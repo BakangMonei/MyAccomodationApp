@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
@@ -31,9 +32,13 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -65,101 +70,119 @@ fun HomeRoute(
 ) {
     val applied by viewModel.appliedFilters.collectAsStateWithLifecycle()
     val listings by viewModel.listings.collectAsStateWithLifecycle()
-    val data = listings
+    val snackbarHostState = remember { SnackbarHostState() }
     var sheetOpen by remember { mutableStateOf(false) }
 
-    Column(modifier = modifier.fillMaxSize()) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            BadgedBox(badge = { Badge { Text("Live") } }) {
-                AssistChip(
-                    onClick = { sheetOpen = true },
-                    label = { Text("Filters") },
-                    border = AssistChipDefaults.assistChipBorder(
-                        enabled = true,
-                        borderColor = MaterialTheme.colorScheme.outline,
-                    ),
-                )
-            }
-            Column(Modifier.weight(1f)) {
-                Text(
-                    "Near campus",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    "BWP ${applied.minPrice.toInt()}–${applied.maxPrice.toInt()} · updates instantly",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+    LaunchedEffect(Unit) {
+        viewModel.events.collect { message ->
+            snackbarHostState.showSnackbar(message)
         }
-        when {
-            data == null -> {
-                LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items(6) {
-                        ListingSkeleton()
-                    }
+    }
+
+    Scaffold(
+        modifier = modifier,
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { padding ->
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                BadgedBox(badge = { if (applied.locations.isNotEmpty()) Badge { Text(applied.locations.size.toString()) } }) {
+                    AssistChip(
+                        onClick = { sheetOpen = true },
+                        label = { Text("Filters") },
+                        border = AssistChipDefaults.assistChipBorder(
+                            enabled = true,
+                            borderColor = MaterialTheme.colorScheme.outline,
+                        ),
+                    )
+                }
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "Accommodations",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        "BWP ${applied.minPrice.toInt()}–${applied.maxPrice.toInt()} · Gaborone",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
-            data.isEmpty() -> {
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .padding(32.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            "No listings match these filters",
-                            style = MaterialTheme.typography.titleMedium,
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            "Widen the price range or clear region filters.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
-            else -> {
-                LazyColumn(
-                    Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
-                    contentPadding = PaddingValues(bottom = 24.dp),
-                ) {
-                    item {
-                        Row(
-                            Modifier.padding(horizontal = 16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            Icon(
-                                Icons.Filled.Refresh,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.tertiary,
-                                modifier = Modifier.size(18.dp),
-                            )
-                            Text(
-                                "${data.size} places · Firestore realtime",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+            when {
+                listings == null -> {
+                    LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        items(6) {
+                            ListingSkeleton()
                         }
                     }
-                    items(
-                        count = data.size,
-                        key = { data[it].id },
-                    ) { index ->
-                        val item = data[index]
-                        ListingCard(item) { onOpenListing(item.id) }
+                }
+                listings!!.isEmpty() -> {
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .padding(32.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                "No listings found",
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "Try adjusting your filters or price range.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(Modifier.height(16.dp))
+                            Button(onClick = {
+                                viewModel.applyFilters(ListingFilters(0.0, 10_000.0, emptyList(), emptyList(), null))
+                            }) {
+                                Text("Reset filters")
+                            }
+                        }
+                    }
+                }
+                else -> {
+                    val data = listings!!
+                    LazyColumn(
+                        Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                        contentPadding = PaddingValues(bottom = 24.dp),
+                    ) {
+                        item {
+                            Row(
+                                Modifier.padding(horizontal = 16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                Icon(
+                                    Icons.Filled.Refresh,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.tertiary,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                                Text(
+                                    "${data.size} rooms available now",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                        items(
+                            count = data.size,
+                            key = { data[it].id },
+                        ) { index ->
+                            val item = data[index]
+                            ListingCard(item) { onOpenListing(item.id) }
+                        }
                     }
                 }
             }
@@ -227,7 +250,7 @@ private fun ListingCard(
                     .height(200.dp),
             ) {
                 AsyncImage(
-                    model = listing.imageUrls.first(),
+                    model = listing.imageUrls.firstOrNull(),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
@@ -322,10 +345,11 @@ private fun FilterBottomSheet(
                     modifier = Modifier.weight(1f),
                 )
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(16.dp))
             Text("Regions", style = MaterialTheme.typography.labelLarge)
-            GaboroneRegion.ALL.forEach { region ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(GaboroneRegion.ALL.size) { index ->
+                    val region = GaboroneRegion.ALL[index]
                     FilterChip(
                         selected = locs.contains(region),
                         onClick = {
@@ -338,14 +362,16 @@ private fun FilterBottomSheet(
             Spacer(Modifier.height(8.dp))
             Text("Type", style = MaterialTheme.typography.labelLarge)
             val typeOptions = listOf("Single Room", "Sharing", "Flat", "Bachelor")
-            typeOptions.forEach { t ->
-                FilterChip(
-                    selected = types.contains(t),
-                    onClick = {
-                        if (!types.remove(t)) types.add(t)
-                    },
-                    label = { Text(t) },
-                )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                typeOptions.forEach { t ->
+                    FilterChip(
+                        selected = types.contains(t),
+                        onClick = {
+                            if (!types.remove(t)) types.add(t)
+                        },
+                        label = { Text(t) },
+                    )
+                }
             }
             Spacer(Modifier.height(8.dp))
             OutlinedTextField(

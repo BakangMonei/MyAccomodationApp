@@ -113,24 +113,37 @@ fun DetailRoute(
             Spacer(Modifier.height(8.dp))
             if (item.status == ListingStatus.Available) {
                 Button(
-                    onClick = { onReserve(item.id) },
+                    onClick = { 
+                        if (authUid != null) onReserve(item.id) 
+                        else onOpenChat("auth", "") // Hack to trigger auth, or better, just check in NavHost
+                    },
                     modifier = Modifier.fillMaxWidth(),
+                    enabled = true
                 ) {
-                    Text("Reserve (sandbox deposit)")
+                    Text(if (authUid != null) "Reserve (sandbox deposit)" else "Sign in to reserve")
                 }
             } else {
                 Text("Currently reserved.", color = MaterialTheme.colorScheme.error)
             }
-            if (authUid != null && authUid != item.providerId) {
-                Button(
-                    onClick = {
-                        val chatId = ChatIds.forStudentAndProvider(authUid, item.providerId)
-                        onOpenChat(chatId, item.providerId)
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text("Message landlord")
+            if (authUid != null) {
+                if (authUid != item.providerId) {
+                    Button(
+                        onClick = {
+                            val chatId = ChatIds.forStudentAndProvider(authUid, item.providerId)
+                            onOpenChat(chatId, item.providerId)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Message landlord")
+                    }
                 }
+            } else {
+                Text(
+                    "Sign in to chat with the landlord.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
             }
         }
     }

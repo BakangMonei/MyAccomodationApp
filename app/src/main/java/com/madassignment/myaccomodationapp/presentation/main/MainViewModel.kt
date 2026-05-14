@@ -26,15 +26,15 @@ class MainViewModel @Inject constructor(
 
     private val uidFlow = observeAuthState()
         .map { it?.uid }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     val profile: StateFlow<UserProfile?> = uidFlow
         .filterNotNull()
         .flatMapLatest { observeUserProfile(it) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     val unreadChats: StateFlow<Int> = uidFlow
         .filterNotNull()
         .flatMapLatest { observeTotalChatUnread(it) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, 0)
 }

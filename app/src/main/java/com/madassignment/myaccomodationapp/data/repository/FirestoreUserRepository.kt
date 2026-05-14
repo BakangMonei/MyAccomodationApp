@@ -29,7 +29,6 @@ class FirestoreUserRepository @Inject constructor(
         val reg = firestore.collection("users").document(uid)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
-                    trySend(null)
                     return@addSnapshotListener
                 }
                 trySend(snapshot?.toUserProfileOrNull())

@@ -1,5 +1,6 @@
 package com.madassignment.myaccomodationapp.presentation.profile
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -9,7 +10,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -18,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -25,12 +30,53 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @Composable
 fun ProfileRoute(
+    onNavigateToAuth: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: ProfileViewModel = hiltViewModel(),
 ) {
+    val isSignedIn by viewModel.isSignedIn.collectAsStateWithLifecycle()
     val profile by viewModel.profile.collectAsStateWithLifecycle()
     val reservations by viewModel.reservations.collectAsStateWithLifecycle()
     var deletePassword by rememberSaveable { mutableStateOf("") }
+
+    if (!isSignedIn) {
+        Column(
+            modifier.fillMaxSize().padding(32.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text("Your Profile", style = MaterialTheme.typography.headlineSmall)
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Sign in to see your reservations, save preferences, and chat with landlords.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+            Spacer(Modifier.height(24.dp))
+            Button(onClick = onNavigateToAuth, modifier = Modifier.fillMaxWidth()) {
+                Text("Sign in / Register")
+            }
+        }
+        return
+    }
+
+    if (profile == null) {
+        Column(
+            modifier.fillMaxSize().padding(32.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            CircularProgressIndicator()
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "Loading your profile...",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        return
+    }
 
     LazyColumn(
         modifier
@@ -51,12 +97,16 @@ fun ProfileRoute(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(24.dp))
             Text("Active reservations", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(8.dp))
         }
         if (reservations.isEmpty()) {
             item {
-                Card(Modifier.fillMaxWidth()) {
+                Card(
+                    Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+                ) {
                     Column(Modifier.padding(16.dp)) {
                         Text("No reservations yet.")
                         Text(
@@ -69,34 +119,35 @@ fun ProfileRoute(
             }
         } else {
             items(reservations, key = { it.id }) { res ->
-                Card(Modifier.fillMaxWidth()) {
+                Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                     Column(Modifier.padding(12.dp)) {
                         Text("Receipt ${res.receiptNumber}", style = MaterialTheme.typography.titleSmall)
-                        Text("Listing ${res.listingId}")
-                        Text("P${res.amount.toInt()}")
+                        Text("Listing ID: ${res.listingId}", style = MaterialTheme.typography.bodySmall)
+                        Text("Amount paid: P${res.amount.toInt()}", color = MaterialTheme.colorScheme.primary)
                     }
                 }
-                Spacer(Modifier.height(8.dp))
             }
         }
         item {
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(32.dp))
             Button(
                 onClick = { viewModel.signOut() },
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("Sign out") }
-            Spacer(Modifier.height(16.dp))
-            Text("Delete account (requires password)", style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.height(24.dp))
+            Text("Danger Zone", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error)
+            Spacer(Modifier.height(8.dp))
             OutlinedTextField(
                 value = deletePassword,
                 onValueChange = { deletePassword = it },
-                label = { Text("Password") },
+                label = { Text("Enter password to confirm deletion") },
                 modifier = Modifier.fillMaxWidth(),
             )
             Spacer(Modifier.height(8.dp))
             Button(
                 onClick = { viewModel.deleteAccount(deletePassword) },
                 modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
             ) { Text("Delete account permanently") }
         }
     }

@@ -12,14 +12,19 @@ import com.madassignment.myaccomodationapp.domain.usecase.ObserveUserProfileUseC
 import com.madassignment.myaccomodationapp.domain.usecase.SaveUserPreferencesUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -35,53 +40,72 @@ class HomeViewModel @Inject constructor(
 
     private val authUid = observeAuthState()
         .map { it?.uid }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     val userProfile = authUid
         .filterNotNull()
         .flatMapLatest { uid -> observeUserProfile(uid) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     private val _appliedFilters = MutableStateFlow(
-        ListingFilters(0.0, 10_000.0, emptyList(), emptyList(), null),
+        ListingFilters(0.0, 30_000.0, emptyList(), emptyList(), null),
     )
     val appliedFilters: StateFlow<ListingFilters> = _appliedFilters.asStateFlow()
 
+    private val _events = MutableSharedFlow<String>()
+    val events = _events.asSharedFlow()
+
     init {
-        viewModelScope.launch {
-            userProfile.collect { profile ->
-                profile?.let { _appliedFilters.value = it.preferences.toListingFilters() }
+        // Sync filters with user preferences when they load
+        userProfile
+            .filterNotNull()
+            .onEach { profile ->
+                val fromProfile = profile.preferences.toListingFilters()
+                // Only update if different to avoid restarting the listings flow unnecessarily
+                if (fromProfile != _appliedFilters.value) {
+                    _appliedFilters.value = fromProfile
+                }
             }
-        }
+            .launchIn(viewModelScope)
     }
 
     /**
-     * Null means the first snapshot has not arrived yet; empty list is a valid result.
+     * StateFlow holding the current listings. 
+     * Starts as null (loading), then becomes a list (even if empty).
      */
     val listings: StateFlow<List<Listing>?> =
         _appliedFilters
             .flatMapLatest { filters ->
                 observeFilteredListings(filters)
                     .map<List<Listing>, List<Listing>?> { it }
-                    .onStart { emit(null) }
+                    .catch { 
+                        _events.emit("Connection error")
+                        // We don't emit emptyList here to prevent the UI from "disappearing" data on error
+                    }
             }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+            .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     fun applyFilters(filters: ListingFilters) {
         _appliedFilters.value = filters
         val uid = authUid.value ?: return
         viewModelScope.launch {
-            val current = userProfile.value?.preferences ?: defaultUserPreferences()
-            saveUserPreferences(
-                uid,
-                current.copy(
-                    minPriceBwp = filters.minPrice,
-                    maxPriceBwp = filters.maxPrice,
-                    locations = filters.locations,
-                    types = filters.types,
-                    availabilityOnOrBefore = filters.availabilityOnOrBefore,
-                ),
-            )
+            try {
+                val current = userProfile.value?.preferences ?: defaultUserPreferences()
+                saveUserPreferences(
+                    uid,
+                    current.copy(
+                        minPriceBwp = filters.minPrice,
+                        maxPriceBwp = filters.maxPrice,
+                        locations = filters.locations,
+                        types = filters.types,
+                        availabilityOnOrBefore = filters.availabilityOnOrBefore,
+                    ),
+                ).getOrThrow()
+                _events.emit("Preferences updated")
+            } catch (e: Exception) {
+                _events.emit("Applied locally")
+            }
         }
     }
 }

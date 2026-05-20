@@ -5,6 +5,7 @@ import com.madassignment.myaccomodationapp.domain.model.ChatThread
 import com.madassignment.myaccomodationapp.domain.model.Listing
 import com.madassignment.myaccomodationapp.domain.model.ListingStatus
 import com.madassignment.myaccomodationapp.domain.model.Reservation
+import com.madassignment.myaccomodationapp.domain.model.ReservationStatus
 import com.madassignment.myaccomodationapp.domain.model.UserPreferences
 import com.madassignment.myaccomodationapp.domain.model.UserProfile
 import com.madassignment.myaccomodationapp.domain.model.UserRole
@@ -138,6 +139,12 @@ fun DocumentSnapshot.toReservationOrNull(): Reservation? {
     val balanceAmount = (get("balanceAmount") as? Number)?.toDouble() ?: 0.0
     val balanceReceipt = getString("balanceReceiptNumber")
     val balancePaidAt = getTimestamp("balancePaidAt")?.toInstant()
+    val statusWire = getString("status")
+    val status = statusWire?.let { wire ->
+        ReservationStatus.entries.firstOrNull { it.wireValue == wire }
+    } ?: ReservationStatus.Active
+    val studentDisplayName = getString("studentDisplayName")
+    val cancelledAt = getTimestamp("cancelledAt")?.toInstant()
     return Reservation(
         id = id,
         listingId = listingId,
@@ -147,11 +154,14 @@ fun DocumentSnapshot.toReservationOrNull(): Reservation? {
         timestamp = ts.toInstant(),
         providerId = providerId,
         payerEmail = payerEmail,
+        studentDisplayName = studentDisplayName,
         listingTitle = listingTitle,
         depositAmount = depositAmount,
         balanceAmount = balanceAmount,
         balanceReceiptNumber = balanceReceipt,
         balancePaidAt = balancePaidAt,
+        status = status,
+        cancelledAt = cancelledAt,
     )
 }
 

@@ -24,6 +24,13 @@ class PayReservationBalanceUseCase @Inject constructor(
     ): Result<Reservation> = reservationRepository.payReservationBalance(reservationId, userId)
 }
 
+class CancelReservationUseCase @Inject constructor(
+    private val reservationRepository: ReservationRepository,
+) {
+    suspend operator fun invoke(reservationId: String, userId: String): Result<Unit> =
+        reservationRepository.cancelReservation(reservationId, userId)
+}
+
 class ObserveUserReservationsUseCase @Inject constructor(
     private val reservationRepository: ReservationRepository,
 ) {

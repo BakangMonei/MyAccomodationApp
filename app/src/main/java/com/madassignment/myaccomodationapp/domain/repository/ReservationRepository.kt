@@ -8,6 +8,8 @@ interface ReservationRepository {
 
     suspend fun payReservationBalance(reservationId: String, userId: String): Result<Reservation>
 
+    suspend fun cancelReservation(reservationId: String, userId: String): Result<Unit>
+
     fun observeReservationsForUser(userId: String): Flow<List<Reservation>>
 
     fun observeReservationsForProvider(providerId: String): Flow<List<Reservation>>

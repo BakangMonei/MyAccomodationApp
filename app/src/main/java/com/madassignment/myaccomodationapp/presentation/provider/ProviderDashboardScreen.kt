@@ -64,7 +64,8 @@ fun ProviderDashboardRoute(
     viewModel: ProviderDashboardViewModel = hiltViewModel(),
 ) {
     val listings by viewModel.myListings.collectAsStateWithLifecycle()
-    val recentPayments by viewModel.recentPayments.collectAsStateWithLifecycle()
+    val activeReservations by viewModel.activeReservations.collectAsStateWithLifecycle()
+    val reservationByListingId by viewModel.reservationByListingId.collectAsStateWithLifecycle()
     val publishing by viewModel.publishing.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
 
@@ -290,40 +291,51 @@ fun ProviderDashboardRoute(
                     }
                 }
             }
-            item {
-                Spacer(Modifier.height(8.dp))
-                Text("Your listings", style = MaterialTheme.typography.titleLarge)
-            }
-            if (recentPayments.isNotEmpty()) {
+            if (activeReservations.isNotEmpty()) {
                 item {
                     Spacer(Modifier.height(8.dp))
-                    Text("Recent payments", style = MaterialTheme.typography.titleLarge)
+                    Text("Active bookings", style = MaterialTheme.typography.titleLarge)
                 }
-                items(recentPayments, key = { it.id }) { payment ->
+                items(activeReservations, key = { it.id }) { booking ->
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
                         ),
                     ) {
                         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(
-                                "Receipt: ${payment.receiptNumber}",
+                                booking.listingTitle.ifBlank { "Listing" },
                                 style = MaterialTheme.typography.titleSmall,
                             )
-                            Text("Amount: P${payment.amount.toInt()}")
-                            Text("Payer: ${payment.payerEmail ?: payment.userId}")
                             Text(
-                                "Listing ID: ${payment.listingId}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                "Reserved by ${booking.studentLabel}",
+                                style = MaterialTheme.typography.bodyMedium,
                             )
+                            Text(
+                                "Deposit receipt: ${booking.receiptNumber} · P${booking.depositAmount.toInt()}",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            if (!booking.isFullyPaid) {
+                                Text(
+                                    "Balance due: P${booking.balanceAmount.toInt()}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
                     }
                 }
             }
+            item {
+                Spacer(Modifier.height(8.dp))
+                Text("Your listings", style = MaterialTheme.typography.titleLarge)
+            }
             items(listings, key = { it.id }) { listing ->
-                ProviderListingCard(listing = listing)
+                ProviderListingCard(
+                    listing = listing,
+                    reservation = reservationByListingId[listing.id],
+                )
             }
         }
     }
@@ -332,6 +344,7 @@ fun ProviderDashboardRoute(
 @Composable
 private fun ProviderListingCard(
     listing: com.madassignment.myaccomodationapp.domain.model.Listing,
+    reservation: com.madassignment.myaccomodationapp.domain.model.Reservation?,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -360,11 +373,20 @@ private fun ProviderListingCard(
                 color = MaterialTheme.colorScheme.primary,
             )
             if (listing.status == ListingStatus.Reserved) {
+                val reservedLabel = reservation?.studentLabel
+                    ?: listing.reservedBy
                 Text(
-                    "Reserved${listing.reservedBy?.let { " by $it" } ?: ""}",
-                    style = MaterialTheme.typography.bodySmall,
+                    "Reserved by ${reservedLabel ?: "a student"}",
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.tertiary,
                 )
+                reservation?.payerEmail?.let { email ->
+                    Text(
+                        email,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
     }

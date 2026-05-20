@@ -10,6 +10,7 @@ import com.madassignment.myaccomodationapp.domain.exception.BookingConflictExcep
 import com.madassignment.myaccomodationapp.domain.model.ChatIds
 import com.madassignment.myaccomodationapp.domain.model.ListingStatus
 import com.madassignment.myaccomodationapp.domain.model.Reservation
+import com.madassignment.myaccomodationapp.domain.model.ReservationStatus
 import com.madassignment.myaccomodationapp.domain.repository.ReservationRepository
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -44,6 +45,7 @@ class FirestoreReservationRepository @Inject constructor(
             val userRef = firestore.collection("users").document(userId)
             val userSnap = transaction.get(userRef)
             val payerEmail = userSnap.getString("email")
+            val studentDisplayName = userSnap.getString("displayName")
             val listingTitle = listingSnap.getString("title").orEmpty()
             val monthlyPrice = (listingSnap.get("price") as? Number)?.toDouble() ?: 0.0
             val deposit = depositAmount.coerceAtLeast(0.0)
@@ -68,9 +70,11 @@ class FirestoreReservationRepository @Inject constructor(
                     "timestamp" to FieldValue.serverTimestamp(),
                     "providerId" to providerId,
                     "payerEmail" to payerEmail,
+                    "studentDisplayName" to studentDisplayName,
                     "listingTitle" to listingTitle,
                     "depositAmount" to deposit,
                     "balanceAmount" to balanceDue,
+                    "status" to ReservationStatus.Active.wireValue,
                 ),
             )
 
@@ -83,11 +87,13 @@ class FirestoreReservationRepository @Inject constructor(
                 timestamp = Instant.now(),
                 providerId = providerId,
                 payerEmail = payerEmail,
+                studentDisplayName = studentDisplayName,
                 listingTitle = listingTitle,
                 depositAmount = deposit,
                 balanceAmount = balanceDue,
                 balanceReceiptNumber = null,
                 balancePaidAt = null,
+                status = ReservationStatus.Active,
             )
         }.await()
 
@@ -152,11 +158,16 @@ class FirestoreReservationRepository @Inject constructor(
             )
 
             val payerEmail = resSnap.getString("payerEmail")
+            val studentDisplayName = resSnap.getString("studentDisplayName")
             val listingTitle = resSnap.getString("listingTitle").orEmpty()
             val providerId = resSnap.getString("providerId")
             val depositReceipt = resSnap.getString("receiptNumber")
                 ?: throw IllegalStateException("Missing receipt")
             val createdInstant = resSnap.getTimestamp("timestamp")?.toInstant() ?: Instant.now()
+            val statusWire = resSnap.getString("status")
+            val status = statusWire?.let { wire ->
+                ReservationStatus.entries.firstOrNull { it.wireValue == wire }
+            } ?: ReservationStatus.Active
 
             Reservation(
                 id = reservationId,
@@ -167,11 +178,13 @@ class FirestoreReservationRepository @Inject constructor(
                 timestamp = createdInstant,
                 providerId = providerId,
                 payerEmail = payerEmail,
+                studentDisplayName = studentDisplayName,
                 listingTitle = listingTitle,
                 depositAmount = depositAmount,
                 balanceAmount = balanceAmountStored,
                 balanceReceiptNumber = balanceReceipt,
                 balancePaidAt = Instant.now(),
+                status = status,
             )
         }.await()
 
@@ -187,6 +200,98 @@ class FirestoreReservationRepository @Inject constructor(
         )
 
         reservation
+    }
+
+    override suspend fun cancelReservation(reservationId: String, userId: String): Result<Unit> = runCatching {
+        val cancelMeta = firestore.runTransaction { transaction ->
+            val reservationRef = firestore.collection("reservations").document(reservationId)
+            val resSnap = transaction.get(reservationRef)
+            if (!resSnap.exists()) {
+                throw IllegalStateException("Reservation not found")
+            }
+            if (resSnap.getString("userId") != userId) {
+                throw IllegalStateException("Not your reservation")
+            }
+            val listingTitle = resSnap.getString("listingTitle").orEmpty()
+            val providerId = resSnap.getString("providerId")
+            val currentStatus = resSnap.getString("status") ?: ReservationStatus.Active.wireValue
+            if (currentStatus == ReservationStatus.Cancelled.wireValue) {
+                return@runTransaction listingTitle to providerId
+            }
+
+            val listingId = resSnap.getString("listingId")
+                ?: throw IllegalStateException("Missing listing")
+            val listingRef = firestore.collection("listings").document(listingId)
+            val listingSnap = transaction.get(listingRef)
+            if (listingSnap.exists() &&
+                listingSnap.getString("status") == ListingStatus.Reserved.wireValue &&
+                listingSnap.getString("reservedBy") == userId
+            ) {
+                transaction.update(
+                    listingRef,
+                    mapOf(
+                        "status" to ListingStatus.Available.wireValue,
+                        "reservedBy" to FieldValue.delete(),
+                        "reservedAt" to FieldValue.delete(),
+                    ),
+                )
+            }
+            transaction.update(
+                reservationRef,
+                mapOf(
+                    "status" to ReservationStatus.Cancelled.wireValue,
+                    "cancelledAt" to FieldValue.serverTimestamp(),
+                ),
+            )
+            listingTitle to providerId
+        }.await()
+
+        notifyProviderCancellation(
+            userId = userId,
+            providerId = cancelMeta.second,
+            listingTitle = cancelMeta.first,
+        )
+    }
+
+    private suspend fun notifyProviderCancellation(
+        userId: String,
+        providerId: String?,
+        listingTitle: String,
+    ) {
+        if (providerId.isNullOrBlank() || providerId == userId) return
+        runCatching {
+            val userSnap = firestore.collection("users").document(userId).get().await()
+            val studentLabel = userSnap.getString("displayName")
+                ?: userSnap.getString("email")
+                ?: userId
+            val chatId = ChatIds.forStudentAndProvider(userId, providerId)
+            val chatRef = firestore.collection("chats").document(chatId)
+            val messageText = "I cancelled my reservation for \"$listingTitle\" (sandbox undo)."
+            firestore.runBatch { batch ->
+                batch.set(
+                    chatRef,
+                    mapOf(
+                        "chatId" to chatId,
+                        "participantIds" to listOf(userId, providerId).sorted(),
+                        "lastMessageText" to messageText,
+                        "lastSenderId" to userId,
+                        "lastMessageAt" to FieldValue.serverTimestamp(),
+                        "lastActivityAt" to FieldValue.serverTimestamp(),
+                    ),
+                    SetOptions.merge(),
+                )
+                batch.set(
+                    chatRef.collection("messages").document(),
+                    mapOf(
+                        "chatId" to chatId,
+                        "senderId" to userId,
+                        "text" to messageText,
+                        "sentAt" to FieldValue.serverTimestamp(),
+                        "readBy" to listOf(userId),
+                    ),
+                )
+            }.await()
+        }
     }
 
     /**
@@ -259,7 +364,9 @@ class FirestoreReservationRepository @Inject constructor(
                     trySend(emptyList())
                     return@addSnapshotListener
                 }
-                val items = snapshot?.documents.orEmpty().mapNotNull { it.toReservationOrNull() }
+                val items = snapshot?.documents.orEmpty()
+                    .mapNotNull { it.toReservationOrNull() }
+                    .filter { it.isActive }
                 trySend(items)
             }
         awaitClose { reg.remove() }
@@ -274,13 +381,15 @@ class FirestoreReservationRepository @Inject constructor(
                     trySend(emptyList())
                     return@addSnapshotListener
                 }
-                val items = snapshot?.documents.orEmpty().mapNotNull { it.toReservationOrNull() }
+                val items = snapshot?.documents.orEmpty()
+                    .mapNotNull { it.toReservationOrNull() }
+                    .filter { it.isActive }
                 trySend(items)
             }
         awaitClose { reg.remove() }
     }
 
     private companion object {
-        // INDEX REQUIRED: reservations (userId ASC, timestamp DESC)
+        // INDEX: reservations (userId ASC, timestamp DESC), (providerId ASC, timestamp DESC)
     }
 }

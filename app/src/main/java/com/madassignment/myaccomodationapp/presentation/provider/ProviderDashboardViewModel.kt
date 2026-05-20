@@ -41,19 +41,23 @@ class ProviderDashboardViewModel @Inject constructor(
 
     private val uidFlow = observeAuthState()
         .map { it?.uid }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     val myListings: StateFlow<List<Listing>> = uidFlow
         .filterNotNull()
         .flatMapLatest { observeProviderListings(it) }
         .map { list -> list.sortedByDescending { it.createdAt } }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val recentPayments: StateFlow<List<Reservation>> = uidFlow
+    val activeReservations: StateFlow<List<Reservation>> = uidFlow
         .flatMapLatest { uid ->
             if (uid == null) flowOf(emptyList()) else observeProviderReservations(uid)
         }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val reservationByListingId: StateFlow<Map<String, Reservation>> = activeReservations
+        .map { reservations -> reservations.associateBy { it.listingId } }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
 
     private val _publishing = MutableStateFlow(false)
     val publishing: StateFlow<Boolean> = _publishing.asStateFlow()

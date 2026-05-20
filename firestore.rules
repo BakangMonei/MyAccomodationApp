@@ -20,9 +20,14 @@ service cloud.firestore {
       allow update: if isSignedIn() && (
         // Provider can update their own listing
         request.auth.uid == resource.data.providerId ||
-        // Student can update status when reserving (only changing specific fields)
+        // Student reserves: Available -> Reserved
         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'reservedBy', 'reservedAt'])
-         && resource.data.status == 'Available')
+         && resource.data.status == 'Available') ||
+        // Student cancels: Reserved (by self) -> Available
+        (resource.data.status == 'Reserved'
+         && resource.data.reservedBy == request.auth.uid
+         && request.resource.data.status == 'Available'
+         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'reservedBy', 'reservedAt']))
       );
       allow delete: if isSignedIn() && request.auth.uid == resource.data.providerId;
     }

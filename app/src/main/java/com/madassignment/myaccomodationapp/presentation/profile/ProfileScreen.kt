@@ -3,6 +3,7 @@ package com.madassignment.myaccomodationapp.presentation.profile
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -15,16 +16,23 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.Row
 import androidx.hilt.navigation.compose.hiltViewModel
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -38,8 +46,14 @@ fun ProfileRoute(
 ) {
     val isSignedIn by viewModel.isSignedIn.collectAsStateWithLifecycle()
     val profile by viewModel.profile.collectAsStateWithLifecycle()
-    val reservations by viewModel.reservations.collectAsStateWithLifecycle()
+    val activeReservations by viewModel.activeReservations.collectAsStateWithLifecycle()
+    val cancellingIds by viewModel.cancellingIds.collectAsStateWithLifecycle()
     var deletePassword by rememberSaveable { mutableStateOf("") }
+    val snackbar = remember { SnackbarHostState() }
+
+    LaunchedEffect(Unit) {
+        viewModel.events.collect { snackbar.showSnackbar(it) }
+    }
 
     if (!isSignedIn) {
         Column(
@@ -80,9 +94,13 @@ fun ProfileRoute(
         return
     }
 
+    androidx.compose.material3.Scaffold(
+        snackbarHost = { SnackbarHost(snackbar) },
+    ) { padding ->
     LazyColumn(
         modifier
             .fillMaxSize()
+            .padding(padding)
             .padding(16.dp),
     ) {
         item {
@@ -114,7 +132,7 @@ fun ProfileRoute(
             Text("Active reservations", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
         }
-        if (reservations.isEmpty()) {
+        if (activeReservations.isEmpty()) {
             item {
                 Card(
                     Modifier.fillMaxWidth(),
@@ -131,7 +149,7 @@ fun ProfileRoute(
                 }
             }
         } else {
-            items(reservations, key = { it.id }) { res ->
+            items(activeReservations, key = { it.id }) { res ->
                 Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                     Column(Modifier.padding(12.dp)) {
                         val title = res.listingTitle.ifBlank { "Listing" }
@@ -149,7 +167,23 @@ fun ProfileRoute(
                             )
                         }
                         Text("Total paid: P${res.amount.toInt()}", style = MaterialTheme.typography.bodyMedium)
-                        Text("Listing ID: ${res.listingId}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.height(8.dp))
+                        val isCancelling = res.id in cancellingIds
+                        OutlinedButton(
+                            onClick = { viewModel.cancelReservation(res.id) },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !isCancelling,
+                        ) {
+                            if (isCancelling) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    CircularProgressIndicator(Modifier.size(18.dp))
+                                    Spacer(Modifier.size(8.dp))
+                                    Text("Cancelling…")
+                                }
+                            } else {
+                                Text("Cancel reservation (undo)")
+                            }
+                        }
                     }
                 }
             }
@@ -176,5 +210,6 @@ fun ProfileRoute(
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
             ) { Text("Delete account permanently") }
         }
+    }
     }
 }

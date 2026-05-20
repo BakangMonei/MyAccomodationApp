@@ -39,7 +39,7 @@ class FirestoreChatRepository @Inject constructor(
     }
 
     override fun observeMessages(chatId: String): Flow<List<ChatMessage>> = callbackFlow {
-        // INDEX REQUIRED: chats/{chatId}/messages (sentAt ASC)
+        // Single-field index on sentAt is created automatically for subcollection queries.
         val reg = messagesCollection(chatId)
             .orderBy("sentAt", com.google.firebase.firestore.Query.Direction.ASCENDING)
             .addSnapshotListener { snapshot, error ->

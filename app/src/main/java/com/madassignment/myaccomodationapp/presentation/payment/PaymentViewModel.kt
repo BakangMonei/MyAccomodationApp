@@ -6,11 +6,13 @@ import androidx.lifecycle.viewModelScope
 import com.madassignment.myaccomodationapp.domain.exception.BookingConflictException
 import com.madassignment.myaccomodationapp.domain.model.AuthUser
 import com.madassignment.myaccomodationapp.domain.model.Listing
+import com.madassignment.myaccomodationapp.domain.model.ListingStatus
 import com.madassignment.myaccomodationapp.domain.model.Reservation
 import com.madassignment.myaccomodationapp.domain.usecase.ObserveAuthStateUseCase
 import com.madassignment.myaccomodationapp.domain.usecase.ObserveListingUseCase
 import com.madassignment.myaccomodationapp.domain.usecase.PayReservationBalanceUseCase
 import com.madassignment.myaccomodationapp.domain.usecase.ReserveListingUseCase
+import com.google.firebase.firestore.FirebaseFirestoreException
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -49,8 +51,22 @@ class PaymentViewModel @Inject constructor(
     private val _ui = MutableStateFlow<PaymentUiState>(PaymentUiState.Idle)
     val ui: StateFlow<PaymentUiState> = _ui.asStateFlow()
 
-    fun payDeposit(depositAmount: Double) {
-        val user = authUser.value ?: return
+    fun payDeposit() {
+        val user = authUser.value
+        if (user == null) {
+            _ui.value = PaymentUiState.Error("Sign in to complete payment.")
+            return
+        }
+        val currentListing = listing.value
+        if (currentListing == null) {
+            _ui.value = PaymentUiState.Error("Listing is still loading. Try again.")
+            return
+        }
+        if (currentListing.status != ListingStatus.Available) {
+            _ui.value = PaymentUiState.Error("This room is no longer available.")
+            return
+        }
+        val depositAmount = currentListing.depositAmount.coerceAtLeast(0.0)
         viewModelScope.launch {
             _ui.value = PaymentUiState.ProcessingDeposit
             val result = reserveListing(listingId, user.uid, depositAmount)
@@ -68,7 +84,11 @@ class PaymentViewModel @Inject constructor(
     }
 
     fun payBalance() {
-        val user = authUser.value ?: return
+        val user = authUser.value
+        if (user == null) {
+            _ui.value = PaymentUiState.Error("Sign in to complete payment.")
+            return
+        }
         val awaiting = _ui.value as? PaymentUiState.AwaitingBalance ?: return
         val reservation = awaiting.reservation
         viewModelScope.launch {
@@ -81,10 +101,25 @@ class PaymentViewModel @Inject constructor(
         }
     }
 
-    private fun Throwable.toPaymentError(): PaymentUiState.Error =
-        if (this is BookingConflictException) {
-            PaymentUiState.Error("Someone else just reserved this room. Please pick another listing.")
-        } else {
-            PaymentUiState.Error(message ?: "Could not complete reservation.")
+    fun clearError() {
+        if (_ui.value is PaymentUiState.Error) {
+            _ui.value = PaymentUiState.Idle
         }
+    }
+
+    private fun Throwable.toPaymentError(): PaymentUiState.Error {
+        val chain = generateSequence(this) { it.cause }.toList()
+        if (chain.any { it is BookingConflictException }) {
+            return PaymentUiState.Error("Someone else just reserved this room. Please pick another listing.")
+        }
+        val firestoreError = chain.filterIsInstance<FirebaseFirestoreException>().firstOrNull()
+        if (firestoreError?.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+            return PaymentUiState.Error(
+                "Payment blocked by Firestore rules. Deploy the latest firestore.rules, then try again.",
+            )
+        }
+        return PaymentUiState.Error(
+            firestoreError?.message ?: message ?: "Could not complete reservation.",
+        )
+    }
 }

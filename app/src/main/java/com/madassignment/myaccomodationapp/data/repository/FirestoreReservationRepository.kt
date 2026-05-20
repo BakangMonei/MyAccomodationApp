@@ -1,5 +1,8 @@
 package com.madassignment.myaccomodationapp.data.repository
 
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
 import com.madassignment.myaccomodationapp.data.mapper.toInstant
 import com.madassignment.myaccomodationapp.data.mapper.toReservationOrNull
 import com.madassignment.myaccomodationapp.data.util.ReceiptNumbers
@@ -8,9 +11,6 @@ import com.madassignment.myaccomodationapp.domain.model.ChatIds
 import com.madassignment.myaccomodationapp.domain.model.ListingStatus
 import com.madassignment.myaccomodationapp.domain.model.Reservation
 import com.madassignment.myaccomodationapp.domain.repository.ReservationRepository
-import com.google.firebase.firestore.FieldValue
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -29,9 +29,12 @@ class FirestoreReservationRepository @Inject constructor(
         userId: String,
         depositAmount: Double,
     ): Result<Reservation> = runCatching {
-        firestore.runTransaction { transaction ->
+        val reservation = firestore.runTransaction { transaction ->
             val listingRef = firestore.collection("listings").document(listingId)
             val listingSnap = transaction.get(listingRef)
+            if (!listingSnap.exists()) {
+                throw IllegalStateException("Listing not found")
+            }
             val status = listingSnap.getString("status")
             if (status != ListingStatus.Available.wireValue) {
                 throw BookingConflictException()
@@ -43,7 +46,10 @@ class FirestoreReservationRepository @Inject constructor(
             val payerEmail = userSnap.getString("email")
             val listingTitle = listingSnap.getString("title").orEmpty()
             val monthlyPrice = (listingSnap.get("price") as? Number)?.toDouble() ?: 0.0
-            val balanceDue = (monthlyPrice - depositAmount).coerceAtLeast(0.0)
+            val deposit = depositAmount.coerceAtLeast(0.0)
+            val balanceDue = (monthlyPrice - deposit).coerceAtLeast(0.0)
+            val providerId = listingSnap.getString("providerId")
+
             transaction.update(
                 listingRef,
                 mapOf(
@@ -57,83 +63,53 @@ class FirestoreReservationRepository @Inject constructor(
                 mapOf(
                     "listingId" to listingId,
                     "userId" to userId,
-                    "amount" to depositAmount,
+                    "amount" to deposit,
                     "receiptNumber" to receipt,
                     "timestamp" to FieldValue.serverTimestamp(),
-                    "providerId" to listingSnap.getString("providerId"),
+                    "providerId" to providerId,
                     "payerEmail" to payerEmail,
                     "listingTitle" to listingTitle,
-                    "depositAmount" to depositAmount,
+                    "depositAmount" to deposit,
                     "balanceAmount" to balanceDue,
                 ),
             )
-
-            val providerId = listingSnap.getString("providerId")
-            if (!providerId.isNullOrBlank()) {
-                val providerRef = firestore.collection("users").document(providerId)
-                val providerSnap = transaction.get(providerRef)
-                val providerEmail = providerSnap.getString("email")
-                val chatId = ChatIds.forStudentAndProvider(userId, providerId)
-                val chatRef = firestore.collection("chats").document(chatId)
-                val depositText =
-                    "I paid the deposit (P${depositAmount.toInt()}) for \"$listingTitle\". Receipt: $receipt"
-                transaction.set(
-                    chatRef,
-                    mapOf(
-                        "chatId" to chatId,
-                        "participantIds" to listOf(userId, providerId).sorted(),
-                        "lastMessageText" to depositText,
-                        "lastSenderId" to userId,
-                        "lastMessageAt" to FieldValue.serverTimestamp(),
-                        "lastActivityAt" to FieldValue.serverTimestamp(),
-                        "participantEmails" to mapOf(
-                            userId to (payerEmail ?: ""),
-                            providerId to (providerEmail ?: ""),
-                        ),
-                    ),
-                    SetOptions.merge(),
-                )
-                val messageRef = chatRef.collection("messages").document()
-                transaction.set(
-                    messageRef,
-                    mapOf(
-                        "chatId" to chatId,
-                        "senderId" to userId,
-                        "text" to depositText,
-                        "sentAt" to FieldValue.serverTimestamp(),
-                        "readBy" to listOf(userId),
-                    ),
-                )
-                transaction.update(
-                    chatRef,
-                    com.google.firebase.firestore.FieldPath.of("unread", providerId),
-                    FieldValue.increment(1),
-                )
-            }
 
             Reservation(
                 id = reservationRef.id,
                 listingId = listingId,
                 userId = userId,
-                amount = depositAmount,
+                amount = deposit,
                 receiptNumber = receipt,
                 timestamp = Instant.now(),
                 providerId = providerId,
                 payerEmail = payerEmail,
                 listingTitle = listingTitle,
-                depositAmount = depositAmount,
+                depositAmount = deposit,
                 balanceAmount = balanceDue,
                 balanceReceiptNumber = null,
                 balancePaidAt = null,
             )
         }.await()
+
+        notifyProviderPayment(
+            userId = userId,
+            providerId = reservation.providerId,
+            payerEmail = reservation.payerEmail,
+            listingTitle = reservation.listingTitle,
+            amountPaid = reservation.depositAmount,
+            receipt = reservation.receiptNumber,
+            isBalance = false,
+            depositReceipt = null,
+        )
+
+        reservation
     }
 
     override suspend fun payReservationBalance(
         reservationId: String,
         userId: String,
     ): Result<Reservation> = runCatching {
-        firestore.runTransaction { transaction ->
+        val reservation = firestore.runTransaction { transaction ->
             val reservationRef = firestore.collection("reservations").document(reservationId)
             val resSnap = transaction.get(reservationRef)
             if (!resSnap.exists()) {
@@ -180,49 +156,8 @@ class FirestoreReservationRepository @Inject constructor(
             val providerId = resSnap.getString("providerId")
             val depositReceipt = resSnap.getString("receiptNumber")
                 ?: throw IllegalStateException("Missing receipt")
-            if (!providerId.isNullOrBlank()) {
-                val providerRef = firestore.collection("users").document(providerId)
-                val providerSnap = transaction.get(providerRef)
-                val providerEmail = providerSnap.getString("email")
-                val chatId = ChatIds.forStudentAndProvider(userId, providerId)
-                val chatRef = firestore.collection("chats").document(chatId)
-                val balanceText =
-                    "I paid the balance (P${balanceAmountStored.toInt()}) for \"$listingTitle\". Receipt: $balanceReceipt (deposit receipt: $depositReceipt)"
-                transaction.set(
-                    chatRef,
-                    mapOf(
-                        "chatId" to chatId,
-                        "participantIds" to listOf(userId, providerId).sorted(),
-                        "lastMessageText" to balanceText,
-                        "lastSenderId" to userId,
-                        "lastMessageAt" to FieldValue.serverTimestamp(),
-                        "lastActivityAt" to FieldValue.serverTimestamp(),
-                        "participantEmails" to mapOf(
-                            userId to (payerEmail ?: ""),
-                            providerId to (providerEmail ?: ""),
-                        ),
-                    ),
-                    SetOptions.merge(),
-                )
-                val messageRef = chatRef.collection("messages").document()
-                transaction.set(
-                    messageRef,
-                    mapOf(
-                        "chatId" to chatId,
-                        "senderId" to userId,
-                        "text" to balanceText,
-                        "sentAt" to FieldValue.serverTimestamp(),
-                        "readBy" to listOf(userId),
-                    ),
-                )
-                transaction.update(
-                    chatRef,
-                    com.google.firebase.firestore.FieldPath.of("unread", providerId),
-                    FieldValue.increment(1),
-                )
-            }
-
             val createdInstant = resSnap.getTimestamp("timestamp")?.toInstant() ?: Instant.now()
+
             Reservation(
                 id = reservationId,
                 listingId = listingId,
@@ -239,6 +174,80 @@ class FirestoreReservationRepository @Inject constructor(
                 balancePaidAt = Instant.now(),
             )
         }.await()
+
+        notifyProviderPayment(
+            userId = userId,
+            providerId = reservation.providerId,
+            payerEmail = reservation.payerEmail,
+            listingTitle = reservation.listingTitle,
+            amountPaid = reservation.balanceAmount,
+            receipt = reservation.balanceReceiptNumber.orEmpty(),
+            isBalance = true,
+            depositReceipt = reservation.receiptNumber,
+        )
+
+        reservation
+    }
+
+    /**
+     * Best-effort landlord notification. Payment already succeeded; chat failures must not roll back booking.
+     */
+    private suspend fun notifyProviderPayment(
+        userId: String,
+        providerId: String?,
+        payerEmail: String?,
+        listingTitle: String,
+        amountPaid: Double,
+        receipt: String,
+        isBalance: Boolean,
+        depositReceipt: String?,
+    ) {
+        if (providerId.isNullOrBlank() || providerId == userId) return
+        runCatching {
+            val providerSnap = firestore.collection("users").document(providerId).get().await()
+            val providerEmail = providerSnap.getString("email")
+            val chatId = ChatIds.forStudentAndProvider(userId, providerId)
+            val chatRef = firestore.collection("chats").document(chatId)
+            val messageText = if (isBalance) {
+                "I paid the balance (P${amountPaid.toInt()}) for \"$listingTitle\". Receipt: $receipt (deposit receipt: $depositReceipt)"
+            } else {
+                "I paid the deposit (P${amountPaid.toInt()}) for \"$listingTitle\". Receipt: $receipt"
+            }
+            firestore.runBatch { batch ->
+                batch.set(
+                    chatRef,
+                    mapOf(
+                        "chatId" to chatId,
+                        "participantIds" to listOf(userId, providerId).sorted(),
+                        "lastMessageText" to messageText,
+                        "lastSenderId" to userId,
+                        "lastMessageAt" to FieldValue.serverTimestamp(),
+                        "lastActivityAt" to FieldValue.serverTimestamp(),
+                        "participantEmails" to mapOf(
+                            userId to (payerEmail ?: ""),
+                            providerId to (providerEmail ?: ""),
+                        ),
+                    ),
+                    SetOptions.merge(),
+                )
+                val messageRef = chatRef.collection("messages").document()
+                batch.set(
+                    messageRef,
+                    mapOf(
+                        "chatId" to chatId,
+                        "senderId" to userId,
+                        "text" to messageText,
+                        "sentAt" to FieldValue.serverTimestamp(),
+                        "readBy" to listOf(userId),
+                    ),
+                )
+                batch.update(
+                    chatRef,
+                    com.google.firebase.firestore.FieldPath.of("unread", providerId),
+                    FieldValue.increment(1),
+                )
+            }.await()
+        }
     }
 
     override fun observeReservationsForUser(userId: String): Flow<List<Reservation>> = callbackFlow {

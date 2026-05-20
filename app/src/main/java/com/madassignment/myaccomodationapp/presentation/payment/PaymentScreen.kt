@@ -95,7 +95,7 @@ fun PaymentRoute(
                 } else when (val state = ui) {
                     PaymentUiState.Idle -> {
                         Button(
-                            onClick = { paymentViewModel.payDeposit(l.depositAmount) },
+                            onClick = { paymentViewModel.payDeposit() },
                             modifier = Modifier.fillMaxWidth(),
                             enabled = l.status == ListingStatus.Available,
                         ) {
@@ -167,9 +167,18 @@ fun PaymentRoute(
                         )
                     }
                     is PaymentUiState.Error -> {
-                        Text(state.message, color = MaterialTheme.colorScheme.error)
+                        Text(state.message, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center)
                         Spacer(Modifier.height(12.dp))
-                        Button(onClick = onBack) { Text("Go back") }
+                        if (l.status == ListingStatus.Available) {
+                            Button(
+                                onClick = { paymentViewModel.clearError(); paymentViewModel.payDeposit() },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text("Try again")
+                            }
+                            Spacer(Modifier.height(8.dp))
+                        }
+                        Button(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Go back") }
                     }
                 }
             } ?: Text("Loading…")

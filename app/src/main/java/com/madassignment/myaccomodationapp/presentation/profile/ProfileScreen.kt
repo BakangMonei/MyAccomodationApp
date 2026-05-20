@@ -26,6 +26,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @Composable
@@ -91,8 +93,19 @@ fun ProfileRoute(
                 Text(p.email, style = MaterialTheme.typography.bodyMedium)
                 Text("Role: ${p.role.name}", style = MaterialTheme.typography.bodySmall)
                 Spacer(Modifier.height(8.dp))
+                val dateLabel = p.preferences.availabilityOnOrBefore?.let { instant ->
+                    DateTimeFormatter.ofPattern("d MMM yyyy")
+                        .withZone(ZoneId.systemDefault())
+                        .format(instant)
+                }
                 Text(
-                    "Saved filters: BWP ${p.preferences.minPriceBwp.toInt()}–${p.preferences.maxPriceBwp.toInt()}",
+                    buildString {
+                        append("Saved filters: BWP ${p.preferences.minPriceBwp.toInt()}–${p.preferences.maxPriceBwp.toInt()}")
+                        if (p.preferences.locations.isNotEmpty()) {
+                            append(" · ${p.preferences.locations.joinToString()}")
+                        }
+                        dateLabel?.let { append(" · Available by $it") }
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

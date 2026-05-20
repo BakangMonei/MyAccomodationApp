@@ -31,6 +31,17 @@ exports.notifyMatchingUsers = functions.firestore
       if (listing.price < min || listing.price > max) continue;
       if (locs.length && !locs.includes(listing.location)) continue;
       if (types.length && !types.includes(listing.type)) continue;
+      const cutoff = prefs.availabilityOnOrBefore;
+      if (cutoff) {
+        const cutoffDate = cutoff.toDate ? cutoff.toDate() : new Date(cutoff);
+        const listingAvail = listing.availabilityDate;
+        if (listingAvail) {
+          const availDate = listingAvail.toDate
+            ? listingAvail.toDate()
+            : new Date(listingAvail);
+          if (availDate > cutoffDate) continue;
+        }
+      }
       const token = prefs.fcmToken;
       if (token) tokens.push(token);
     }

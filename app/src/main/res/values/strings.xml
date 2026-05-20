@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">MyAccomodationApp</string>
+    <string name="notification_channel_listing_alerts">Listing alerts</string>
+    <string name="notification_channel_listing_alerts_desc">Notifications when a new listing matches your saved filters</string>
 </resources>

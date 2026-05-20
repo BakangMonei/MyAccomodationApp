@@ -28,6 +28,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.madassignment.myaccomodationapp.domain.model.ListingStatus
 import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -76,11 +77,27 @@ fun PaymentRoute(
                     )
                 }
                 Spacer(Modifier.height(24.dp))
-                when (val state = ui) {
+                if (l.status != ListingStatus.Available &&
+                    ui !is PaymentUiState.AwaitingBalance &&
+                    ui !is PaymentUiState.Complete &&
+                    ui !is PaymentUiState.ProcessingBalance
+                ) {
+                    Text(
+                        "This room is already reserved. Please choose another listing.",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.error,
+                        textAlign = TextAlign.Center,
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    Button(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
+                        Text("Go back")
+                    }
+                } else when (val state = ui) {
                     PaymentUiState.Idle -> {
                         Button(
                             onClick = { paymentViewModel.payDeposit(l.depositAmount) },
                             modifier = Modifier.fillMaxWidth(),
+                            enabled = l.status == ListingStatus.Available,
                         ) {
                             Text("Pay deposit (sandbox)")
                         }

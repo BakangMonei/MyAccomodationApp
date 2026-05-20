@@ -30,8 +30,13 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -54,6 +59,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
@@ -419,10 +427,33 @@ private fun FilterBottomSheet(
     var max by remember { mutableStateOf(initial.maxPrice.toString()) }
     val locs = remember { mutableStateListOf<String>().apply { addAll(initial.locations) } }
     val types = remember { mutableStateListOf<String>().apply { addAll(initial.types) } }
-    var dateMillis by remember {
-        mutableStateOf(
-            initial.availabilityOnOrBefore?.toEpochMilli()?.toString().orEmpty(),
+    var availabilityInstant by remember { mutableStateOf(initial.availabilityOnOrBefore) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    val dateFormatter = remember {
+        DateTimeFormatter.ofPattern("d MMM yyyy").withZone(ZoneId.systemDefault())
+    }
+
+    if (showDatePicker) {
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = availabilityInstant?.toEpochMilli(),
         )
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        availabilityInstant = datePickerState.selectedDateMillis
+                            ?.let { Instant.ofEpochMilli(it) }
+                        showDatePicker = false
+                    },
+                ) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+            },
+        ) {
+            DatePicker(state = datePickerState)
+        }
     }
 
     ModalBottomSheet(
@@ -475,12 +506,21 @@ private fun FilterBottomSheet(
                 }
             }
             Spacer(Modifier.height(8.dp))
-            OutlinedTextField(
-                value = dateMillis,
-                onValueChange = { dateMillis = it },
-                label = { Text("Availability on/before (epoch ms, optional)") },
-                modifier = Modifier.fillMaxWidth(),
-            )
+            Text("Available on or before", style = MaterialTheme.typography.labelLarge)
+            Spacer(Modifier.height(4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { showDatePicker = true }) {
+                    Text(
+                        availabilityInstant?.let { dateFormatter.format(it) }
+                            ?: "Pick date (optional)",
+                    )
+                }
+                if (availabilityInstant != null) {
+                    TextButton(onClick = { availabilityInstant = null }) {
+                        Text("Clear")
+                    }
+                }
+            }
             Spacer(Modifier.height(16.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
@@ -494,8 +534,7 @@ private fun FilterBottomSheet(
                             maxPrice = max.toDoubleOrNull() ?: 20_000.0,
                             locations = locs.toList(),
                             types = types.toList(),
-                            availabilityOnOrBefore = dateMillis.toLongOrNull()
-                                ?.let { java.time.Instant.ofEpochMilli(it) },
+                            availabilityOnOrBefore = availabilityInstant,
                         )
                         onApply(filters)
                     },

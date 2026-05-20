@@ -18,10 +18,23 @@ import com.madassignment.myaccomodationapp.presentation.payment.PaymentRoute
 import com.madassignment.myaccomodationapp.presentation.root.RootViewModel
 
 @Composable
-fun AccommodationNavHost() {
+fun AccommodationNavHost(
+    pendingListingId: String? = null,
+    onPendingListingConsumed: () -> Unit = {},
+) {
     val navController = rememberNavController()
     val rootViewModel: RootViewModel = hiltViewModel()
     val user by rootViewModel.authUser.collectAsStateWithLifecycle()
+
+    NotificationPermissionEffect()
+
+    LaunchedEffect(pendingListingId) {
+        val id = pendingListingId ?: return@LaunchedEffect
+        navController.navigate(Routes.listingDetail(id)) {
+            launchSingleTop = true
+        }
+        onPendingListingConsumed()
+    }
 
     LaunchedEffect(user) {
         // We allow null user (guest) on MAIN, but certain actions will require auth

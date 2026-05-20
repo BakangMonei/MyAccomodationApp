@@ -1,35 +1,42 @@
 {
   "project_info": {
-    "project_number": "408006485279",
-    "firebase_url": "https://fir-app-e5a43-default-rtdb.firebaseio.com",
-    "project_id": "fir-app-e5a43",
-    "storage_bucket": "fir-app-e5a43.firebasestorage.app"
+    "project_number": "406360162",
+    "firebase_url": "https://fantasy-flowers-7166f-default-rtdb.firebaseio.com",
+    "project_id": "fantasy-flowers-7166f",
+    "storage_bucket": "fantasy-flowers-7166f.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:408006485279:android:2e89822f86dd6c6e72bc2a",
+        "mobilesdk_app_id": "1:406360162:android:fbcaf3ade957745c02813b",
         "android_client_info": {
           "package_name": "com.madassignment.myaccomodationapp"
         }
       },
       "oauth_client": [
         {
-          "client_id": "408006485279-kcuq5m9gjipkhjenaotog3teergpd5ia.apps.googleusercontent.com",
+          "client_id": "406360162-2re86vuplbjsjc00bs0ucfq12nefralm.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
       "api_key": [
         {
-          "current_key": "AIzaSyD3RSVKhUoMP_Bxr7A9vdx3rPZHbjRnGhM"
+          "current_key": "AIzaSyBiLttD_TLD-gCc1xc3lVFYXZ6BvpOCVA4"
         }
       ],
       "services": {
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
-              "client_id": "408006485279-kcuq5m9gjipkhjenaotog3teergpd5ia.apps.googleusercontent.com",
+              "client_id": "406360162-2re86vuplbjsjc00bs0ucfq12nefralm.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "406360162-c9b5khck15et9b9hsluqjnnnub6tni1h.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.loginRegisterForgotApp"
+              }
             }
           ]
         }

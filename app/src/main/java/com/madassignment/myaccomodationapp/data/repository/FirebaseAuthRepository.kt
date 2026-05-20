@@ -23,6 +23,9 @@ class FirebaseAuthRepository @Inject constructor(
     private val firestore: FirebaseFirestore,
 ) : AuthRepository {
 
+    override fun currentUser(): AuthUser? =
+        auth.currentUser?.let { AuthUser(uid = it.uid, email = it.email) }
+
     override val authState: Flow<AuthUser?> = callbackFlow {
         val currentUser = auth.currentUser
         trySend(currentUser?.let { AuthUser(uid = it.uid, email = it.email) })

@@ -8,6 +8,7 @@ import com.madassignment.myaccomodationapp.domain.model.AuthUser
 import com.madassignment.myaccomodationapp.domain.model.Listing
 import com.madassignment.myaccomodationapp.domain.model.ListingStatus
 import com.madassignment.myaccomodationapp.domain.model.Reservation
+import com.madassignment.myaccomodationapp.domain.repository.AuthRepository
 import com.madassignment.myaccomodationapp.domain.usecase.ObserveAuthStateUseCase
 import com.madassignment.myaccomodationapp.domain.usecase.ObserveListingUseCase
 import com.madassignment.myaccomodationapp.domain.usecase.PayReservationBalanceUseCase
@@ -38,12 +39,13 @@ class PaymentViewModel @Inject constructor(
     private val payReservationBalance: PayReservationBalanceUseCase,
     observeAuthState: ObserveAuthStateUseCase,
     observeListing: ObserveListingUseCase,
+    private val authRepository: AuthRepository,
 ) : ViewModel() {
 
     private val listingId: String = checkNotNull(savedStateHandle["listingId"])
 
     private val authUser: StateFlow<AuthUser?> = observeAuthState()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     val listing: StateFlow<Listing?> = observeListing(listingId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
@@ -51,8 +53,10 @@ class PaymentViewModel @Inject constructor(
     private val _ui = MutableStateFlow<PaymentUiState>(PaymentUiState.Idle)
     val ui: StateFlow<PaymentUiState> = _ui.asStateFlow()
 
+    private fun resolvedAuthUser(): AuthUser? = authUser.value ?: authRepository.currentUser()
+
     fun payDeposit() {
-        val user = authUser.value
+        val user = resolvedAuthUser()
         if (user == null) {
             _ui.value = PaymentUiState.Error("Sign in to complete payment.")
             return
@@ -84,7 +88,7 @@ class PaymentViewModel @Inject constructor(
     }
 
     fun payBalance() {
-        val user = authUser.value
+        val user = resolvedAuthUser()
         if (user == null) {
             _ui.value = PaymentUiState.Error("Sign in to complete payment.")
             return

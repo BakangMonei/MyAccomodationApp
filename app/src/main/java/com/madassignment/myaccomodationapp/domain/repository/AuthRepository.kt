@@ -7,6 +7,9 @@ import kotlinx.coroutines.flow.Flow
 interface AuthRepository {
     val authState: Flow<AuthUser?>
 
+    /** Synchronous snapshot for actions that must not depend on a cold auth StateFlow. */
+    fun currentUser(): AuthUser?
+
     suspend fun signIn(email: String, password: String): Result<Unit>
 
     suspend fun signUp(

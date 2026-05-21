@@ -20,5 +20,9 @@ interface ListingRepository {
 
     suspend fun upsertListing(listing: Listing): Result<Unit>
 
+    suspend fun updateListing(listing: Listing): Result<Unit>
+
+    suspend fun deleteListing(listingId: String, providerId: String): Result<Unit>
+
     fun observeListingsForProvider(providerId: String): Flow<List<Listing>>
 }

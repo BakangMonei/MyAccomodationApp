@@ -36,6 +36,19 @@ class UpsertListingUseCase @Inject constructor(
     suspend operator fun invoke(listing: Listing): Result<Unit> = listingRepository.upsertListing(listing)
 }
 
+class UpdateListingUseCase @Inject constructor(
+    private val listingRepository: ListingRepository,
+) {
+    suspend operator fun invoke(listing: Listing): Result<Unit> = listingRepository.updateListing(listing)
+}
+
+class DeleteListingUseCase @Inject constructor(
+    private val listingRepository: ListingRepository,
+) {
+    suspend operator fun invoke(listingId: String, providerId: String): Result<Unit> =
+        listingRepository.deleteListing(listingId, providerId)
+}
+
 class ObserveProviderListingsUseCase @Inject constructor(
     private val listingRepository: ListingRepository,
 ) {

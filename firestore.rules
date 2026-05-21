@@ -16,10 +16,13 @@ service cloud.firestore {
     // Accommodation Listings
     match /listings/{listingId} {
       allow read: if true;
-      allow create: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.providerId == request.auth.uid
+        && request.resource.data.status == 'Available';
       allow update: if isSignedIn() && (
-        // Provider can update their own listing
-        request.auth.uid == resource.data.providerId ||
+        // Provider edits own listing (cannot reassign ownership)
+        (request.auth.uid == resource.data.providerId
+         && request.resource.data.providerId == resource.data.providerId) ||
         // Student reserves: Available -> Reserved
         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'reservedBy', 'reservedAt'])
          && resource.data.status == 'Available') ||

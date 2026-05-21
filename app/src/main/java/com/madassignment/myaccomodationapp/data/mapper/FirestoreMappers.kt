@@ -125,6 +125,19 @@ fun Listing.toFirestoreMap(): Map<String, Any?> =
         "reservedAt" to reservedAt?.toTimestamp(),
     )
 
+/** Fields a provider may change when editing; excludes status, reservation, and ownership. */
+fun Listing.toProviderEditableMap(): Map<String, Any?> = mapOf(
+    "title" to title,
+    "price" to price,
+    "depositAmount" to depositAmount,
+    "location" to location,
+    "type" to type,
+    "amenities" to amenities,
+    "availabilityDate" to availabilityDate.toTimestamp(),
+    "imageUrls" to imageUrls,
+    "providerDisplayName" to providerDisplayName,
+)
+
 fun DocumentSnapshot.toReservationOrNull(): Reservation? {
     val id = id
     val listingId = getString("listingId") ?: return null

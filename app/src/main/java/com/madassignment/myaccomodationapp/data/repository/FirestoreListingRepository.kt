@@ -3,6 +3,7 @@ package com.madassignment.myaccomodationapp.data.repository
 import android.util.Log
 import com.madassignment.myaccomodationapp.data.mapper.toFirestoreMap
 import com.madassignment.myaccomodationapp.data.mapper.toListingOrNull
+import com.madassignment.myaccomodationapp.data.mapper.toProviderEditableMap
 import com.madassignment.myaccomodationapp.data.util.FirestoreCursors
 import com.madassignment.myaccomodationapp.domain.model.Listing
 import com.madassignment.myaccomodationapp.domain.model.ListingFilters
@@ -121,14 +122,33 @@ class FirestoreListingRepository @Inject constructor(
     }
 
     override suspend fun upsertListing(listing: Listing): Result<Unit> = runCatching {
-        if (listing.id.isBlank()) {
-            val doc = firestore.collection(COLLECTION).document()
-            doc.set(listing.copy(id = doc.id).toFirestoreMap()).await()
-        } else {
-            firestore.collection(COLLECTION).document(listing.id)
-                .set(listing.toFirestoreMap())
-                .await()
+        val doc = firestore.collection(COLLECTION).document()
+        doc.set(listing.copy(id = doc.id).toFirestoreMap()).await()
+    }
+
+    override suspend fun updateListing(listing: Listing): Result<Unit> = runCatching {
+        require(listing.id.isNotBlank()) { "Listing id required for update" }
+        val ref = firestore.collection(COLLECTION).document(listing.id)
+        val snap = ref.get().await()
+        if (!snap.exists()) {
+            throw IllegalStateException("Listing not found")
         }
+        if (snap.getString("providerId") != listing.providerId) {
+            throw IllegalStateException("Not your listing")
+        }
+        ref.update(listing.toProviderEditableMap()).await()
+    }
+
+    override suspend fun deleteListing(listingId: String, providerId: String): Result<Unit> = runCatching {
+        val ref = firestore.collection(COLLECTION).document(listingId)
+        val snap = ref.get().await()
+        if (!snap.exists()) {
+            throw IllegalStateException("Listing not found")
+        }
+        if (snap.getString("providerId") != providerId) {
+            throw IllegalStateException("Not your listing")
+        }
+        ref.delete().await()
     }
 
     override fun observeListingsForProvider(providerId: String): Flow<List<Listing>> = callbackFlow {
